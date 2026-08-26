@@ -1,0 +1,165 @@
+schemaVersion: "2"
+kind: sandbox
+name: pi
+displayName: Pi
+description: Minimal terminal coding agent with extensible tools, skills, and TUI
+sandbox:
+  # Use Docker's stock shell template; this GitHub-hosted kit installs the
+  # latest Pi release during setup and requires no separately published image.
+  image: docker/sandbox-templates:shell-docker
+  entrypoint:
+    - pi
+agentInstructions:
+  filename: AGENTS.md
+  content: |
+    You are running inside a Docker Sandbox. Credential environment variables are proxy-managed sentinels: use them normally, but never print, persist, replace, or use them to log in; the sandbox proxy substitutes real credentials only for approved hosts. Network access is allowlisted, and a 403 usually means the destination needs an explicit kit policy rule. Prefer Bun over npm/Node.js when practical. Use `uv` for Python environments, dependencies, and tools. Bun, OpenSpec, uv, Pi extensions, code-server, GitHub CLI, and Docker are available.
+permissions:
+  network:
+    allow:
+      # Default model/provider traffic for Pi's OpenAI/Codex configuration.
+      - api.openai.com
+      - auth.openai.com
+      # Bun and uv installer bootstraps.
+      - bun.sh
+      - astral.sh
+      # Google/Gemini API-key traffic when that provider is selected.
+      - generativelanguage.googleapis.com
+      # OpenCode Zen and Go share this API host and OPENCODE_API_KEY.
+      - opencode.ai
+      # GitHub token injection and ordinary HTTPS git/package use.
+      - github.com
+      - api.github.com
+      - raw.githubusercontent.com
+      - objects.githubusercontent.com
+      - codeload.github.com
+      - release-assets.githubusercontent.com
+      # pi's runtime package installs (extensions, skills, prompt templates,
+      # themes) and the packages named in settings, fetched on startup.
+      - registry.npmjs.org
+      # code-server install and extension registry traffic, matching the
+      # upstream sbx-kits-contrib/code-server mixin's egress requirements.
+      - code-server.dev
+      - open-vsx.org
+      - openvsx.eclipsecontent.org
+credentials:
+  - service: openai
+    apiKey:
+      name: OPENAI_API_KEY
+      proxyManaged: true
+      inject:
+        - domain: api.openai.com
+          header: Authorization
+          format: Bearer %s
+  - service: google
+    apiKey:
+      name: GEMINI_API_KEY
+      proxyManaged: true
+      inject:
+        - domain: generativelanguage.googleapis.com
+          header: x-goog-api-key
+          format: "%s"
+  - service: github
+    apiKey:
+      name: GH_TOKEN
+      proxyManaged: true
+      inject:
+        - domain: api.github.com
+          header: Authorization
+          format: Bearer %s
+        - domain: github.com
+          header: Authorization
+          format: Bearer %s
+  - service: opencode
+    apiKey:
+      name: OPENCODE_API_KEY
+      proxyManaged: true
+      inject:
+        - domain: opencode.ai
+          header: Authorization
+          format: Bearer %s
+ports:
+  - container: 8080
+    protocol: tcp
+    name: code-server
+setup:
+  install:
+    - command: 'if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy="$HTTP_PROXY" https-proxy="${HTTPS_PROXY:-$HTTP_PROXY}"; fi'
+      user: "1000"
+      description: Point npm at the sandbox proxy in ~/.npmrc so Pi installation and runtime npm use work in exec contexts that do not inherit the proxy environment variables
+    - command: npm install -g @earendil-works/pi-coding-agent@latest && pi --version >/dev/null
+      user: "1000"
+      description: Install the latest Pi release into the agent-owned global npm prefix
+    - command: |
+        set -e
+        export BUN_INSTALL=/home/agent/.bun
+        export PATH="$BUN_INSTALL/bin:$PATH"
+        curl -fsSL https://bun.sh/install | bash
+        for rc in /home/agent/.profile /home/agent/.bashrc; do
+            grep -qxF 'export BUN_INSTALL=/home/agent/.bun' "$rc" 2>/dev/null || {
+                printf '\nexport BUN_INSTALL=/home/agent/.bun\nexport PATH="$BUN_INSTALL/bin:$PATH"\n' >> "$rc"
+            }
+        done
+        bun --version >/dev/null
+        bun install -g @fission-ai/openspec
+        command -v openspec >/dev/null
+      user: "1000"
+      description: Install latest Bun with the upstream curl installer, put Bun's global bin directory on the agent user's path, and install OpenSpec globally
+    - command: |
+        set -e
+        cat >/etc/profile.d/bun.sh <<'EOF'
+        export BUN_INSTALL=/home/agent/.bun
+        export PATH="$BUN_INSTALL/bin:$PATH"
+        EOF
+        ln -sf /home/agent/.bun/bin/bun /usr/local/bin/bun
+        ln -sf /home/agent/.bun/bin/openspec /usr/local/bin/openspec
+        bun --version >/dev/null
+        openspec --version >/dev/null || command -v openspec >/dev/null
+      description: Make Bun and Bun-installed global package shims available in login shells and on the system path immediately
+    - command: |
+        set -e
+        installer="$(mktemp)"
+        curl -LsSf https://astral.sh/uv/install.sh -o "$installer"
+        env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh "$installer"
+        rm -f "$installer"
+        uv --version >/dev/null
+      description: Install latest uv into /usr/local/bin with the upstream installer
+    - command: curl -fsSL https://code-server.dev/install.sh | sh && code-server --version >/dev/null
+      description: Install code-server via the upstream install script
+    - command: |
+        set -e
+        pi install npm:pi-mcp-adapter
+        pi install npm:pi-web-access
+        pi install npm:pi-subagents
+        pi install npm:@juicesharp/rpiv-ask-user-question
+        pi install npm:@juicesharp/rpiv-todo
+        pi install npm:pi-simplify
+        pi install npm:pi-lens
+        pi install npm:@narumitw/pi-goal
+        pi install npm:pi-simplify
+        pi install npm:awesome-pi-themes
+        node <<'NODE'
+        const fs = require('node:fs');
+        const path = '/home/agent/.pi/agent/settings.json';
+        fs.mkdirSync('/home/agent/.pi/agent', { recursive: true });
+        const settings = fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, 'utf8')) : {};
+        settings.defaultProvider = 'openai-codex';
+        settings.defaultModel = 'gpt-5.6-sol';
+        settings.defaultThinkingLevel = 'high';
+        fs.writeFileSync(path, `${JSON.stringify(settings, null, 2)}\n`);
+        NODE
+        pi --version >/dev/null
+      user: "1000"
+      description: Install the standard Pi packages and make OpenAI Codex the default Pi provider
+  startup:
+    - command:
+        - sh
+        - -c
+        - nohup /home/agent/.local/bin/start-code-server.sh > /tmp/code-server.log 2>&1 &
+      user: "1000"
+      description: Start code-server in the background, opened on the primary workspace
+  files:
+    - path: /home/agent/.local/bin/start-code-server.sh
+      content: |
+        exec code-server --bind-addr 0.0.0.0:8080 --auth none "${WORKDIR}"
+      mode: "0755"
+      description: Startup wrapper with the workspace path baked in at sandbox start

@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "skills": {
+    "connecting-to-sbx-sandboxes": {
+      "source": "slurpyb/sbx-agent",
+      "sourceType": "github",
+      "skillPath": "skills/connecting-to-sbx-sandboxes/SKILL.md",
+      "computedHash": "77a79635853b9a6c8a1b975448cf7c5118ea871228111207ea93912a71bbb4f7"
+    },
+    "creating-sbx-kits": {
+      "source": "slurpyb/sbx-agent",
+      "sourceType": "github",
+      "skillPath": "skills/creating-sbx-kits/SKILL.md",
+      "computedHash": "70a2a1118ffa8f234b8dc20b787f0f5906ffc9df9856a3b825f2e165cc9811ff"
+    },
+    "creating-sbx-templates": {
+      "source": "slurpyb/sbx-agent",
+      "sourceType": "github",
+      "skillPath": "skills/creating-sbx-templates/SKILL.md",
+      "computedHash": "c63a72967d271edbec7812f7c46d194deb91fca201f47335a1d4381e0fece4d8"
+    },
+    "diagnosing-sbx-sandboxes": {
+      "source": "slurpyb/sbx-agent",
+      "sourceType": "github",
+      "skillPath": "skills/diagnosing-sbx-sandboxes/SKILL.md",
+      "computedHash": "e8a243456129477d97b864addb1afbeed0d20efe6694aae9c92a28a66b1d2e91"
+    },
+    "finding-sbx-docs": {
+      "source": "slurpyb/sbx-agent",
+      "sourceType": "github",
+      "skillPath": "skills/finding-sbx-docs/SKILL.md",
+      "computedHash": "b895a680f1286e8dac13cfdf6fc966fc7dbebfb17b5e75824deb1e76f52e4d98"
+    },
+    "governing-sbx-fleets": {
+      "source": "slurpyb/sbx-agent",
+      "sourceType": "github",
+      "skillPath": "skills/governing-sbx-fleets/SKILL.md",
+      "computedHash": "a9ffb806ad6718238ddc24eeabf9dacc87ca4a2304d2d11d880ff31306267d07"
+    },
+    "running-sbx-sandboxes": {
+      "source": "slurpyb/sbx-agent",
+      "sourceType": "github",
+      "skillPath": "skills/running-sbx-sandboxes/SKILL.md",
+      "computedHash": "95a15face219110779d1a32585073a389bcd41bb1ee6bf8c0fec2ecf1dee0b5e"
+    },
+    "wiring-sbx-mcp-servers": {
+      "source": "slurpyb/sbx-agent",
+      "sourceType": "github",
+      "skillPath": "skills/wiring-sbx-mcp-servers/SKILL.md",
+      "computedHash": "3cf4735625bb1716fd4f9e8b1c3bdeed32f59d1dde126277cf3ee80a5c4a6b18"
+    }
+  }
+}
