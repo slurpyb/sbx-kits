@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 HOME = Path(os.environ.get("HOME", "/home/agent"))
-HOOK = "/home/agent/.local/bin/agent-observe-hook"
+HOOK = "python3 /home/agent/.local/bin/agent-observe-hook"
 MARKER = "agent-observe-hook"
 
 

@@ -15,11 +15,9 @@ checkout with `sbx kit validate ./claude`.
 ## Host configuration
 
 Configure required secrets with `sbx secret set` before creating the sandbox.
-The kit declares `anthropic`, `github`, `outline`, `linear`, `shopify`,
-`cloudflare`, `firecrawl`, `jina`, and `perplexity` services. GitHub SSH authentication and
-commit signing use the host's forwarded SSH agent rather than `GH_TOKEN`.
+The built-in Claude agent supplies the `anthropic` and `github` credentials. This mixin declares only `outline`, `linear`, `shopify`, `cloudflare`, `firecrawl`, `jina`, and `perplexity`. GitHub SSH authentication and commit signing use the host's forwarded SSH agent.
 
-Builder Methods Agent OS is cloned to `/home/agent/agent-os`. Its scripts are available as `agent-os-project-install`, `agent-os-sync-to-profile`, and `agent-os-common-functions`; run `agent-os-project-install .` when you want to install Agent OS into the current project.
+Builder Methods Agent OS is cloned to `/home/agent/agent-os`. `/usr/local/bin` contains direct aliases for `agent-os-project-install`, `agent-os-sync-to-profile`, and `agent-os-common-functions`. Change into a project and run `agent-os-project-install` to install it there.
 
 Use `sbx ports <sandbox>` to discover code-server's mapped port. Microsoft's VS
 Code tunnel is started manually with `vscode-server`; browser code-server starts

@@ -16,12 +16,9 @@ checkout with `sbx kit validate ./agy-cli`.
 
 ## Authentication and ACP
 
-Configure the `google` secret so `GEMINI_API_KEY` can be proxy-managed. The kit
-sets Antigravity's required `modelProvider` to `gemini`; setting the environment
-variable alone is not sufficient in agy. The other declared services are `github`, `outline`, `linear`, `shopify`,
-`cloudflare`, `firecrawl`, `jina`, and `perplexity`.
+Configure the built-in Gemini agent's `google` secret so its inherited `GEMINI_API_KEY` can be proxy-managed. The mixin does not redeclare `google` or `github`; duplicate base credential services prevent kit composition. It sets Antigravity's required `modelProvider` to `gemini`; setting the environment variable alone is not sufficient in agy. The mixin declares only `outline`, `linear`, `shopify`, `cloudflare`, `firecrawl`, `jina`, and `perplexity`.
 
-Builder Methods Agent OS is cloned to `/home/agent/agent-os`. Its scripts are available as `agent-os-project-install`, `agent-os-sync-to-profile`, and `agent-os-common-functions`; run `agent-os-project-install .` when you want to install Agent OS into the current project.
+Builder Methods Agent OS is cloned to `/home/agent/agent-os`. `/usr/local/bin` contains direct aliases for `agent-os-project-install`, `agent-os-sync-to-profile`, and `agent-os-common-functions`. Change into a project and run `agent-os-project-install` to install it there.
 
 Agy does not currently document native ACP support. This kit installs the
 unofficial, version-pinned `agy-acp` 0.5.2 adapter and points it at the configured

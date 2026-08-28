@@ -19,9 +19,9 @@ agentInstructions:
 
     GitHub SSH host keys are preloaded. The host SSH agent is forwarded for GitHub authentication and automatic SSH commit/tag signing. If signing fails, verify `SSH_AUTH_SOCK` and `ssh-add -L` before changing Git config.
 
-    Service credentials use these environment variables when configured on the host: `GEMINI_API_KEY`, `GH_TOKEN`, `OUTLINE_API_TOKEN`, `LINEAR_API_KEY`, `SHOPIFY_CLI_THEME_TOKEN`, `TUNNEL_TOKEN`, `FIRECRAWL_API_KEY`, `JINA_API_KEY`, and `PERPLEXITY_API_KEY`.
+    The built-in Gemini agent supplies `GEMINI_API_KEY` and `GH_TOKEN`. This mixin only adds credentials for `OUTLINE_API_TOKEN`, `LINEAR_API_KEY`, `SHOPIFY_CLI_THEME_TOKEN`, `TUNNEL_TOKEN`, `FIRECRAWL_API_KEY`, `JINA_API_KEY`, and `PERPLEXITY_API_KEY`.
 
-    Builder Methods Agent OS is cloned at `/home/agent/agent-os`. Its scripts are exposed as `agent-os-project-install`, `agent-os-sync-to-profile`, and `agent-os-common-functions`; for example, run `agent-os-project-install .` to install it into the current project. `ol`, `lin`, `shopify`, `firecrawl`, `jina`, and `pplx` may require their corresponding credential and/or one-time configuration before first use.
+    Builder Methods Agent OS is cloned at `/home/agent/agent-os`, with direct `/usr/local/bin` aliases named `agent-os-project-install`, `agent-os-sync-to-profile`, and `agent-os-common-functions`. Change into a project and run `agent-os-project-install` to install it there. `ol`, `lin`, `shopify`, `firecrawl`, `jina`, and `pplx` may require their corresponding credential and/or one-time configuration before first use.
 
     Native harness hooks send model invocations, tool activity, stop reasons, and transcript deltas to `AGENT_OBSERVABILITY_URL` (default `http://host.docker.internal:8000`). If its `/healthcheck` is unavailable, events are written to `/home/agent/logs/<session-id>/events.jsonl` and retried later. Create `/home/agent/.never-output-hooks` to disable all output immediately. The host dashboard is in this repository's `observability/` directory.
 
@@ -74,27 +74,6 @@ permissions:
       - host.docker.internal:8000
 
 credentials:
-  - service: google
-    description: Gemini API token used by Antigravity CLI in headless and CI environments.
-    apiKey:
-      name: GEMINI_API_KEY
-      proxyManaged: true
-      inject:
-        - domain: generativelanguage.googleapis.com
-          header: x-goog-api-key
-          format: "%s"
-  - service: github
-    description: GitHub token used by gh and HTTPS GitHub API operations; SSH uses the forwarded host agent.
-    apiKey:
-      name: GH_TOKEN
-      proxyManaged: true
-      inject:
-        - domain: api.github.com
-          header: Authorization
-          scheme: bearer
-        - domain: github.com
-          header: Authorization
-          scheme: bearer
   - service: outline
     description: Outline knowledge-base API token. Kept as a real environment value because the Outline host is user-configurable.
     apiKey:
@@ -156,14 +135,17 @@ setup:
       user: "0"
       command: |
         set -eu
-        apt-get update -qq
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential ca-certificates curl git jq openssh-server python3 python3-venv python3-pip ripgrep unzip xz-utils
+        attempt=0
+        until apt-get update -qq; do attempt=$((attempt + 1)); [ "$attempt" -lt 240 ]; sleep 0.5; done
+        attempt=0
+        until DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential ca-certificates curl git jq openssh-server python3 python3-venv python3-pip ripgrep unzip xz-utils; do attempt=$((attempt + 1)); [ "$attempt" -lt 240 ]; sleep 0.5; done
         ssh-keygen -A
         install -d -m 0700 -o agent -g agent /home/agent/.ssh
         curl -fsSL https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' > /home/agent/.ssh/known_hosts
         chmod 0644 /home/agent/.ssh/known_hosts
         chown agent:agent /home/agent/.ssh/known_hosts
         rm -rf /var/lib/apt/lists/*
+        touch /tmp/sbx-workstation-apt-ready
     - description: Install pinned fnm and Node.js 24 system-wide.
       user: "0"
       command: |
@@ -188,6 +170,7 @@ setup:
         export PATH="/usr/local/bin:$PATH"
         EOF
         node --version | grep -E '^v24\.'
+        touch /tmp/sbx-workstation-node-ready
     - description: Install pinned Bun system-wide.
       user: "0"
       command: |
@@ -209,10 +192,15 @@ setup:
         ln -sf /opt/bun/bin/openspec /usr/local/bin/openspec
         bun --version
         openspec --version >/dev/null
+        touch /tmp/sbx-workstation-bun-ready
     - description: Install requested JavaScript CLIs, language servers, OpenSpec, and Playwright.
       user: "0"
       command: |
         set -eu
+        wait_for() { i=0; while [ ! -e "$1" ] && [ "$i" -lt 240 ]; do sleep 0.5; i=$((i + 1)); done; test -e "$1"; }
+        wait_for /tmp/sbx-workstation-apt-ready
+        wait_for /tmp/sbx-workstation-node-ready
+        wait_for /tmp/sbx-workstation-bun-ready
         npm config set prefix /usr/local
         if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy "$HTTP_PROXY"; npm config set https-proxy "${HTTPS_PROXY:-$HTTP_PROXY}"; fi
         npm install -g --allow-scripts=@doist/outline-cli,esbuild,node-pty \
@@ -241,10 +229,13 @@ setup:
         EOF
         chmod 0755 /usr/local/bin/liquid-language-server
         for bin in ol outline openspec lin linear shopify liquid-language-server firecrawl playwright pyright-langserver typescript-language-server; do command -v "$bin" >/dev/null; done
+        touch /tmp/sbx-workstation-npm-ready
     - description: Install pinned Jina CLI and CodeMap in isolated Python environments.
       user: "0"
       command: |
         set -eu
+        i=0; while [ ! -e /tmp/sbx-workstation-apt-ready ] && [ "$i" -lt 240 ]; do sleep 0.5; i=$((i + 1)); done
+        test -e /tmp/sbx-workstation-apt-ready
         python3 -m venv /opt/jina-cli
         /opt/jina-cli/bin/pip install --no-cache-dir jina-cli==0.3.0
         ln -sf /opt/jina-cli/bin/jina /usr/local/bin/jina
@@ -304,10 +295,13 @@ setup:
         rm -rf /home/agent/.config/nvim/.git
         chown -R agent:agent /home/agent/.config
         nvim --version | head -1
+        touch /tmp/sbx-workstation-nvim-ready
     - description: Pre-install AstroNvim plugins as the agent user.
       user: "1000"
       command: |
         set -eu
+        i=0; while [ ! -e /tmp/sbx-workstation-nvim-ready ] && [ "$i" -lt 240 ]; do sleep 0.5; i=$((i + 1)); done
+        test -e /tmp/sbx-workstation-nvim-ready
         HOME=/home/agent nvim --headless '+Lazy! sync' +qa
     - description: Install pinned Microsoft VS Code CLI/server and browser-based code-server.
       user: "0"
@@ -352,27 +346,20 @@ setup:
         git clone https://github.com/buildermethods/agent-os.git /home/agent/agent-os
         git -C /home/agent/agent-os checkout cae8e664fb59a01869718c3151e0f45b7a06a2fb
         chown -R agent:agent /home/agent/agent-os
-        for script in /home/agent/agent-os/scripts/*.sh; do
-          command_name="agent-os-$(basename "$script" .sh)"
-          printf '#!/bin/sh\nexec "%s" "$@"\n' "$script" > "/usr/local/bin/$command_name"
-          chmod 0755 "/usr/local/bin/$command_name"
-        done
-        cat > /usr/local/bin/agent-os-project-install <<'EOF'
-        #!/bin/sh
-        if [ "$#" -gt 0 ] && [ -d "$1" ]; then
-          target=$1
-          shift
-          cd "$target"
-        fi
-        exec /home/agent/agent-os/scripts/project-install.sh "$@"
-        EOF
-        chmod 0755 /usr/local/bin/agent-os-project-install
-        agent-os-project-install --help >/dev/null
-        command -v agent-os-sync-to-profile agent-os-common-functions >/dev/null
+        ln -sfn /home/agent/agent-os/scripts/project-install.sh /usr/local/bin/agent-os-project-install
+        ln -sfn /home/agent/agent-os/scripts/sync-to-profile.sh /usr/local/bin/agent-os-sync-to-profile
+        ln -sfn /home/agent/agent-os/scripts/common-functions.sh /usr/local/bin/agent-os-common-functions
+        # Upstream scripts source this filename relative to the invoked symlink.
+        ln -sfn /home/agent/agent-os/scripts/common-functions.sh /usr/local/bin/common-functions.sh
+        su agent -s /bin/bash -c 'agent-os-project-install --help >/dev/null'
+        su agent -s /bin/bash -c 'agent-os-sync-to-profile --help >/dev/null'
+        command -v agent-os-common-functions >/dev/null
     - description: Install pinned Google Antigravity CLI for amd64 and arm64.
       user: "0"
       command: |
         set -eu
+        i=0; while [ ! -e /tmp/sbx-workstation-npm-ready ] && [ "$i" -lt 240 ]; do sleep 0.5; i=$((i + 1)); done
+        test -e /tmp/sbx-workstation-npm-ready
         arch=$(dpkg --print-architecture)
         case "$arch" in
           amd64)
@@ -431,8 +418,8 @@ setup:
       description: Start Antigravity CLI with Gemini 3.1 Pro High and high effort.
       content: |
         #!/bin/bash
-        /home/agent/.local/bin/install-observability-hooks agy || true
-        /home/agent/.local/bin/agent-observe-hook --flush >/dev/null 2>&1 || true
+        python3 /home/agent/.local/bin/install-observability-hooks agy || true
+        python3 /home/agent/.local/bin/agent-observe-hook --flush >/dev/null 2>&1 || true
         exec /usr/local/bin/agy --model gemini-3.1-pro-high --effort high "$@"
     - path: /home/agent/.gemini/antigravity-cli/settings.json
       mode: "0644"
