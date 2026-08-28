@@ -44,6 +44,9 @@ permissions:
       - files.pythonhosted.org
       - nodejs.org
       - update.code.visualstudio.com
+      # update.code.visualstudio.com/<ver>/<target>/stable is a 302 to this
+      # asset host; without it the VS Code CLI install fails under deny-all.
+      - vscode.download.prss.microsoft.com
       - archive.ubuntu.com
       - security.ubuntu.com
       - ports.ubuntu.com
@@ -119,6 +122,12 @@ environment:
     AGENT_OBSERVABILITY_URL: http://host.docker.internal:8000
     PLAYWRIGHT_BROWSERS_PATH: /opt/ms-playwright
     NODE_PATH: /usr/local/lib/node_modules
+    # Claude Code's self-updater rewrites /home/agent/.local/bin/claude, which
+    # is exactly where this kit installs its launcher wrapper. Left enabled it
+    # replaces the wrapper mid-session, pins claude-real to the create-time
+    # build forever, and dangles claude-real outright once that build is
+    # pruned. The sandbox tracks the base image's Claude version instead.
+    DISABLE_AUTOUPDATER: "1"
 
 ports:
   - container: 8080
@@ -131,8 +140,15 @@ setup:
       user: "0"
       command: |
         set -eu
-        test -x /home/agent/.local/bin/claude
-        mv /home/agent/.local/bin/claude /home/agent/.local/bin/claude-real
+        bin=/home/agent/.local/bin
+        # Idempotent by design. install re-runs on `sbx kit add` and on a
+        # sandbox created from a template that already captured the wrapper;
+        # there $bin/claude is our own shim, and moving it onto claude-real
+        # would make the launcher exec itself forever.
+        if [ ! -e "$bin/claude-real" ] && [ ! -L "$bin/claude-real" ]; then
+          test -x "$bin/claude"
+          mv "$bin/claude" "$bin/claude-real"
+        fi
     - description: Install base OS dependencies, SSH server, and GitHub SSH trust.
       user: "0"
       command: |
@@ -147,7 +163,6 @@ setup:
         chmod 0644 /home/agent/.ssh/known_hosts
         chown agent:agent /home/agent/.ssh/known_hosts
         rm -rf /var/lib/apt/lists/*
-        touch /tmp/sbx-workstation-apt-ready
     - description: Install pinned fnm and Node.js 24 system-wide.
       user: "0"
       command: |
@@ -172,7 +187,6 @@ setup:
         export PATH="/usr/local/bin:$PATH"
         EOF
         node --version | grep -E '^v24\.'
-        touch /tmp/sbx-workstation-node-ready
     - description: Install pinned Bun system-wide.
       user: "0"
       command: |
@@ -194,18 +208,15 @@ setup:
         ln -sf /opt/bun/bin/openspec /usr/local/bin/openspec
         bun --version
         openspec --version >/dev/null
-        touch /tmp/sbx-workstation-bun-ready
     - description: Install requested JavaScript CLIs, language servers, OpenSpec, and Playwright.
       user: "0"
       command: |
         set -eu
-        wait_for() { i=0; while [ ! -e "$1" ] && [ "$i" -lt 240 ]; do sleep 0.5; i=$((i + 1)); done; test -e "$1"; }
-        wait_for /tmp/sbx-workstation-apt-ready
-        wait_for /tmp/sbx-workstation-node-ready
-        wait_for /tmp/sbx-workstation-bun-ready
         npm config set prefix /usr/local
         if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy "$HTTP_PROXY"; npm config set https-proxy "${HTTPS_PROXY:-$HTTP_PROXY}"; fi
-        npm install -g --allow-scripts=@doist/outline-cli,esbuild \
+        # These packages need their lifecycle scripts (esbuild and
+        # outline-cli fetch platform binaries), which npm runs by default.
+        npm install -g \
           @doist/outline-cli@2.0.1 \
           @linear/cli@0.0.5 \
           @shopify/cli@4.7.0 \
@@ -221,7 +232,8 @@ setup:
         done
         export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
         playwright install --with-deps chromium
-        chmod -R 0777 /opt/ms-playwright
+        chown -R agent:agent /opt/ms-playwright
+        chmod -R a+rX /opt/ms-playwright
         ln -sf "$(command -v ol)" /usr/local/bin/outline
         ln -sf "$(command -v lin)" /usr/local/bin/linear
         cat > /usr/local/bin/liquid-language-server <<'EOF'
@@ -230,13 +242,10 @@ setup:
         EOF
         chmod 0755 /usr/local/bin/liquid-language-server
         for bin in ol outline openspec lin linear shopify liquid-language-server firecrawl playwright pyright-langserver typescript-language-server; do command -v "$bin" >/dev/null; done
-        touch /tmp/sbx-workstation-npm-ready
     - description: Install pinned Jina CLI and CodeMap in isolated Python environments.
       user: "0"
       command: |
         set -eu
-        i=0; while [ ! -e /tmp/sbx-workstation-apt-ready ] && [ "$i" -lt 240 ]; do sleep 0.5; i=$((i + 1)); done
-        test -e /tmp/sbx-workstation-apt-ready
         python3 -m venv /opt/jina-cli
         /opt/jina-cli/bin/pip install --no-cache-dir jina-cli==0.3.0
         ln -sf /opt/jina-cli/bin/jina /usr/local/bin/jina
@@ -296,13 +305,10 @@ setup:
         rm -rf /home/agent/.config/nvim/.git
         chown -R agent:agent /home/agent/.config
         nvim --version | head -1
-        touch /tmp/sbx-workstation-nvim-ready
     - description: Pre-install AstroNvim plugins as the agent user.
       user: "1000"
       command: |
         set -eu
-        i=0; while [ ! -e /tmp/sbx-workstation-nvim-ready ] && [ "$i" -lt 240 ]; do sleep 0.5; i=$((i + 1)); done
-        test -e /tmp/sbx-workstation-nvim-ready
         HOME=/home/agent nvim --headless '+Lazy! sync' +qa
     - description: Install pinned Microsoft VS Code CLI/server and browser-based code-server.
       user: "0"
@@ -373,9 +379,23 @@ setup:
         [
           "sh",
           "-c",
-          "pgrep -f 'code-server.*0.0.0.0:8080' >/dev/null || nohup code-server --bind-addr 0.0.0.0:8080 --auth none '${WORKDIR}' > /tmp/code-server.log 2>&1 &",
+          "nohup /home/agent/.local/bin/start-code-server >> /tmp/code-server.log 2>&1 &",
         ]
   files:
+    - path: /home/agent/.local/bin/start-code-server
+      mode: "0755"
+      description: Start code-server on the workspace. ${WORKDIR} is substituted in setup.files content, which startup argv does not get, so the path is baked in here.
+      content: |
+        #!/bin/sh
+        # Guard on a pidfile: `pgrep -f` also matches the startup shell's own
+        # command line, and the running process is named "node", so neither
+        # pgrep form distinguishes a live server from this very invocation.
+        pidfile=/tmp/code-server.pid
+        if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null; then
+          exit 0
+        fi
+        echo $$ > "$pidfile"
+        exec code-server --bind-addr 0.0.0.0:8080 --auth none "${WORKDIR}"
     - path: /home/agent/.local/bin/claude
       mode: "0755"
       description: Apply the workstation defaults when the built-in Claude agent starts.
@@ -389,9 +409,15 @@ setup:
         #!/bin/bash
         export ANTHROPIC_DEFAULT_MODEL=claude-opus-5
         export CLAUDE_CODE_EFFORT_LEVEL=xhigh
+        real=/home/agent/.local/bin/claude-real
+        # Belt and braces: if claude-real is ever missing or dangling, fall
+        # back to the newest installed build rather than failing to launch.
+        if [ ! -x "$real" ]; then
+          real=$(ls -1d /home/agent/.local/share/claude/versions/* 2>/dev/null | sort -V | tail -n 1)
+        fi
         python3 /home/agent/.local/bin/install-observability-hooks claude || true
         python3 /home/agent/.local/bin/agent-observe-hook --flush >/dev/null 2>&1 || true
-        exec /home/agent/.local/bin/claude-real --model claude-opus-5 --effort xhigh "$@"
+        exec "$real" --model claude-opus-5 --effort xhigh "$@"
     - path: /home/agent/.local/bin/claude-acp
       mode: "0755"
       description: Launch the pinned Claude ACP adapter.

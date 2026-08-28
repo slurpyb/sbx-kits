@@ -37,17 +37,41 @@
       "skillPath": "skills/governing-sbx-fleets/SKILL.md",
       "computedHash": "a9ffb806ad6718238ddc24eeabf9dacc87ca4a2304d2d11d880ff31306267d07"
     },
+    "research": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/research/SKILL.md",
+      "computedHash": "c8c1cba327a6f824b554cd978079a3dadd7406d73174f8fb9bfef58824691970"
+    },
     "running-sbx-sandboxes": {
       "source": "slurpyb/sbx-agent",
       "sourceType": "github",
       "skillPath": "skills/running-sbx-sandboxes/SKILL.md",
       "computedHash": "95a15face219110779d1a32585073a389bcd41bb1ee6bf8c0fec2ecf1dee0b5e"
     },
+    "setup-pre-commit": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/misc/setup-pre-commit/SKILL.md",
+      "computedHash": "7fc7b680161a5cb834b165e36efc2378ff63a1f80df0a9efd18448d366bea98a"
+    },
     "wiring-sbx-mcp-servers": {
       "source": "slurpyb/sbx-agent",
       "sourceType": "github",
       "skillPath": "skills/wiring-sbx-mcp-servers/SKILL.md",
       "computedHash": "3cf4735625bb1716fd4f9e8b1c3bdeed32f59d1dde126277cf3ee80a5c4a6b18"
+    },
+    "wizard": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/wizard/SKILL.md",
+      "computedHash": "dee7f1a523994a1e063c69fe09c2f5b4da97a41ad68107722664e6e472cb2423"
+    },
+    "writing-for-agents": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/productivity/writing-for-agents/SKILL.md",
+      "computedHash": "95da47fc97af998e85b7d7e6d57b3ac76727c1e290cfe9ea09005aacb826959f"
     }
   }
 }

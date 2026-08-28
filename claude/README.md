@@ -23,6 +23,17 @@ Use `sbx ports <sandbox>` to discover code-server's mapped port. Microsoft's VS
 Code tunnel is started manually with `vscode-server`; browser code-server starts
 automatically on container port 8080.
 
+Claude Code's self-updater is disabled (`DISABLE_AUTOUPDATER=1`). The kit
+installs its launcher at `/home/agent/.local/bin/claude` — the same path the
+updater rewrites — so leaving it on would replace the wrapper mid-session and
+strand the preserved `claude-real` binary. The sandbox therefore tracks the
+base image's Claude version; recreate the sandbox to pick up a newer one.
+
+This kit seeds `<workspace>/.claude/settings.local.json` from
+`files/workspace/`. Note that this is an overlay: it is rewritten on every
+sandbox start, and under a direct (non-`--clone`) mount that write lands on the
+host copy of the file.
+
 The kit contains no network deny rule. Docker Sandbox local or organization
 governance may still apply independently.
 
