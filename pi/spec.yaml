@@ -28,7 +28,7 @@ agentInstructions:
 
     ### Tooling
 
-    Prefer `bun` over npm and Node. Use `uv` for Python environments, dependencies, and tools. `openspec`, `gh`, and `docker` are installed, and `code-server` serves the workspace on container port 8080 — find the host port with `sbx ports <sandbox>`.
+    Prefer `bun` over npm and Node. Use `uv` for Python environments, dependencies, and tools. `openspec`, `gh`, and `docker` are installed.
 permissions:
   network:
     allow:
@@ -52,11 +52,6 @@ permissions:
       # pi's runtime package installs (extensions, skills, prompt templates,
       # themes) and the packages named in settings, fetched on startup.
       - registry.npmjs.org
-      # code-server install and extension registry traffic, matching the
-      # upstream sbx-kits-contrib/code-server mixin's egress requirements.
-      - code-server.dev
-      - open-vsx.org
-      - openvsx.eclipsecontent.org
 credentials:
   - service: openai
     apiKey:
@@ -93,10 +88,6 @@ credentials:
         - domain: opencode.ai
           header: Authorization
           format: Bearer %s
-ports:
-  - container: 8080
-    protocol: tcp
-    name: code-server
 setup:
   install:
     - command: 'if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy="$HTTP_PROXY" https-proxy="${HTTPS_PROXY:-$HTTP_PROXY}"; fi'
@@ -139,8 +130,7 @@ setup:
         rm -f "$installer"
         uv --version >/dev/null
       description: Install latest uv into /usr/local/bin with the upstream installer
-    - command: curl -fsSL https://code-server.dev/install.sh | sh && code-server --version >/dev/null
-      description: Install code-server via the upstream install script
+
     - command: |
         set -e
         pi install npm:pi-mcp-adapter
@@ -167,15 +157,5 @@ setup:
       user: "1000"
       description: Install the standard Pi packages and make OpenAI Codex the default Pi provider
   startup:
-    - command:
-        - sh
-        - -c
-        - nohup /home/agent/.local/bin/start-code-server.sh > /tmp/code-server.log 2>&1 &
-      user: "1000"
-      description: Start code-server in the background, opened on the primary workspace
+
   files:
-    - path: /home/agent/.local/bin/start-code-server.sh
-      content: |
-        exec code-server --bind-addr 0.0.0.0:8080 --auth none "${WORKDIR}"
-      mode: "0755"
-      description: Startup wrapper with the workspace path baked in at sandbox start

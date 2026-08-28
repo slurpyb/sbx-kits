@@ -34,7 +34,7 @@ agentInstructions:
     - `cloudflared` for tunnels. `openspec`. `codemap`.
     - `agent-os-project-install` — cd into a project and run it to install Builder Methods Agent OS there. Clone lives at `/home/agent/agent-os`; `agent-os-sync-to-profile` and `agent-os-common-functions` are alongside it.
     - `playwright` with Chromium already at `/opt/ms-playwright` — go straight to scripting; `playwright install` is redundant.
-    - `nvim` (AstroNvim). `code-server` serves the workspace on container port 8080; `vscode-server` opens a Microsoft tunnel on demand.
+    - `nvim` with AstroNvim.
     - Node 24, `bun`/`bunx`, `typescript-language-server`, `pyright-langserver`.
 
     ### Git signing
@@ -68,7 +68,6 @@ permissions:
       - pypi.org
       - files.pythonhosted.org
       - nodejs.org
-      - update.code.visualstudio.com
       - archive.ubuntu.com
       - security.ubuntu.com
       - ports.ubuntu.com
@@ -81,9 +80,6 @@ permissions:
       - api.jina.ai
       - r.jina.ai
       - api.perplexity.ai
-      - code-server.dev
-      - open-vsx.org
-      - openvsx.eclipsecontent.org
       - mcp.docs.astro.build
       - shopify.dev
       - partners.shopify.com
@@ -149,27 +145,34 @@ ports:
   - container: 22
     protocol: tcp
     name: codex-app-server-ssh
-  - container: 8080
-    protocol: tcp
-    name: vscode-server
 
 setup:
   install:
-    - description: Install base OS dependencies, SSH server, and GitHub SSH trust.
+    - description: Ensure sshd and base tools are present, and trust GitHub's SSH host keys.
       user: "0"
       command: |
         set -eu
-        attempt=0
-        until apt-get update -qq; do attempt=$((attempt + 1)); [ "$attempt" -lt 240 ]; sleep 0.5; done
-        attempt=0
-        until DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential ca-certificates curl git jq openssh-server python3 python3-venv python3-pip ripgrep unzip xz-utils; do attempt=$((attempt + 1)); [ "$attempt" -lt 240 ]; sleep 0.5; done
+        # Only touch apt when something is genuinely absent: apt-get update
+        # refreshes every source in sources.list.d, Docker's included, and that
+        # refresh is the cost, not the packages.
+        need=""
+        for pkg in curl git jq python3 unzip; do
+          command -v "$pkg" >/dev/null || need="$need $pkg"
+        done
+        command -v rg >/dev/null || need="$need ripgrep"
+        # Codex app-server is reached over SSH, so this kit really does need sshd.
+        [ -x /usr/sbin/sshd ] || need="$need openssh-server"
+        if [ -n "$need" ]; then
+          attempt=0
+          until apt-get update -qq; do attempt=$((attempt + 1)); [ "$attempt" -lt 240 ]; sleep 0.5; done
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $need
+          rm -rf /var/lib/apt/lists/*
+        fi
         ssh-keygen -A
         install -d -m 0700 -o agent -g agent /home/agent/.ssh
         curl -fsSL https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' > /home/agent/.ssh/known_hosts
         chmod 0644 /home/agent/.ssh/known_hosts
         chown agent:agent /home/agent/.ssh/known_hosts
-        rm -rf /var/lib/apt/lists/*
-        touch /tmp/sbx-workstation-apt-ready
     - description: Install pinned fnm and Node.js 24 system-wide.
       user: "0"
       command: |
@@ -193,8 +196,6 @@ setup:
         export FNM_DIR=/opt/fnm
         export PATH="/usr/local/bin:$PATH"
         EOF
-        node --version | grep -E '^v24\.'
-        touch /tmp/sbx-workstation-node-ready
     - description: Install pinned Bun system-wide.
       user: "0"
       command: |
@@ -214,20 +215,14 @@ setup:
         ln -sf /opt/bun/bin/bun /usr/local/bin/bunx
         BUN_INSTALL=/opt/bun bun install -g @fission-ai/openspec@1.11.0
         ln -sf /opt/bun/bin/openspec /usr/local/bin/openspec
-        bun --version
-        openspec --version >/dev/null
-        touch /tmp/sbx-workstation-bun-ready
     - description: Install requested JavaScript CLIs, language servers, OpenSpec, and Playwright.
       user: "0"
       command: |
         set -eu
-        wait_for() { i=0; while [ ! -e "$1" ] && [ "$i" -lt 240 ]; do sleep 0.5; i=$((i + 1)); done; test -e "$1"; }
-        wait_for /tmp/sbx-workstation-apt-ready
-        wait_for /tmp/sbx-workstation-node-ready
-        wait_for /tmp/sbx-workstation-bun-ready
-        npm config set prefix /usr/local
-        if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy "$HTTP_PROXY"; npm config set https-proxy "${HTTPS_PROXY:-$HTTP_PROXY}"; fi
-        npm install -g --allow-scripts=@doist/outline-cli,esbuild \
+        # bun, not npm: same packages, a fraction of the wall time. --trust
+        # runs the lifecycle scripts esbuild and outline-cli need for their
+        # platform binaries, which bun otherwise skips.
+        BUN_INSTALL=/opt/bun bun install -g --trust \
           @doist/outline-cli@2.0.1 \
           @linear/cli@0.0.5 \
           @shopify/cli@4.7.0 \
@@ -237,38 +232,29 @@ setup:
           pyright@1.1.413 \
           typescript@7.0.2 \
           typescript-language-server@6.0.0
-        npm_bin=$(npm prefix -g)/bin
         for bin in ol lin shopify firecrawl playwright pyright pyright-langserver tsc tsserver typescript-language-server; do
-          [ ! -e "$npm_bin/$bin" ] || ln -sf "$npm_bin/$bin" "/usr/local/bin/$bin"
+          [ ! -e "/opt/bun/bin/$bin" ] || ln -sf "/opt/bun/bin/$bin" "/usr/local/bin/$bin"
         done
-        export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
-        playwright install --with-deps chromium
-        chmod -R 0777 /opt/ms-playwright
-        ln -sf "$(command -v ol)" /usr/local/bin/outline
-        ln -sf "$(command -v lin)" /usr/local/bin/linear
+        ln -sf /opt/bun/bin/ol /usr/local/bin/outline
+        ln -sf /opt/bun/bin/lin /usr/local/bin/linear
         cat > /usr/local/bin/liquid-language-server <<'EOF'
         #!/bin/sh
         exec shopify theme language-server "$@"
         EOF
         chmod 0755 /usr/local/bin/liquid-language-server
-        for bin in ol outline openspec lin linear shopify liquid-language-server firecrawl playwright pyright-langserver typescript-language-server; do command -v "$bin" >/dev/null; done
-        touch /tmp/sbx-workstation-npm-ready
-    - description: Install pinned Jina CLI and CodeMap in isolated Python environments.
+    - description: Install pinned Jina CLI and CodeMap as uv tools.
       user: "0"
       command: |
         set -eu
-        i=0; while [ ! -e /tmp/sbx-workstation-apt-ready ] && [ "$i" -lt 240 ]; do sleep 0.5; i=$((i + 1)); done
-        test -e /tmp/sbx-workstation-apt-ready
-        python3 -m venv /opt/jina-cli
-        /opt/jina-cli/bin/pip install --no-cache-dir jina-cli==0.3.0
-        ln -sf /opt/jina-cli/bin/jina /usr/local/bin/jina
-        ln -sf /opt/jina-cli/bin/jina /usr/local/bin/jina-cli
-        python3 -m venv /opt/codemap
-        /opt/codemap/bin/pip install --no-cache-dir codemap==0.3.0
-        ln -sf /opt/codemap/bin/codemap /usr/local/bin/codemap
-        [ ! -x /opt/codemap/bin/cm ] || ln -sf /opt/codemap/bin/cm /usr/local/bin/cm
-        jina --help >/dev/null
-        codemap --help >/dev/null
+        command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
+        # uv builds the isolated environment, resolves from wheels, and drops
+        # entry-point shims into UV_TOOL_BIN_DIR, so no venv, pip or compiler is
+        # involved. --python 3.12 pins a standalone CPython rather than trusting
+        # whatever the base image ships to satisfy these two.
+        export UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin
+        uv tool install --python 3.12 'jina-cli==0.3.0'
+        uv tool install --python 3.12 'codemap==0.3.0'
+        ln -sf /usr/local/bin/jina /usr/local/bin/jina-cli
     - description: Install pinned cloudflared and Perplexity CLI binaries.
       user: "0"
       command: |
@@ -296,8 +282,6 @@ setup:
         echo "$pplx_sha  /tmp/pplx" | sha256sum -c -
         install -m 0755 /tmp/pplx /usr/local/bin/pplx
         ln -sf /usr/local/bin/pplx /usr/local/bin/perplexity-cli
-        cloudflared --version
-        pplx --help >/dev/null
     - description: Install pinned Neovim and AstroNvim for the agent user.
       user: "0"
       command: |
@@ -317,51 +301,7 @@ setup:
         git -C /home/agent/.config/nvim checkout 49a7161b776f8bc6c23508819ea1ad4e7b359bee
         rm -rf /home/agent/.config/nvim/.git
         chown -R agent:agent /home/agent/.config
-        nvim --version | head -1
-        touch /tmp/sbx-workstation-nvim-ready
-    - description: Pre-install AstroNvim plugins as the agent user.
-      user: "1000"
-      command: |
-        set -eu
-        i=0; while [ ! -e /tmp/sbx-workstation-nvim-ready ] && [ "$i" -lt 240 ]; do sleep 0.5; i=$((i + 1)); done
-        test -e /tmp/sbx-workstation-nvim-ready
-        HOME=/home/agent nvim --headless '+Lazy! sync' +qa
-    - description: Install pinned Microsoft VS Code CLI/server and browser-based code-server.
-      user: "0"
-      command: |
-        set -eu
-        arch=$(dpkg --print-architecture)
-        case "$arch" in
-          amd64)
-            code_target=cli-linux-x64
-            code_sha=fb1ad570680a4b9c6054edd3b12881939b6991001204d96462071f55259dec00
-            asset=code-server-4.135.0-linux-amd64.tar.gz
-            dir=code-server-4.135.0-linux-amd64
-            server_sha=300ef4e37e469e6368a4673c6a623e1c9ba8a34f42b394fb49c431a8900bc7d1
-            ;;
-          arm64)
-            code_target=cli-linux-arm64
-            code_sha=f1596118d027f71051ebb7b35385b98a3a892f183c70ca5cc4ca4eb848e53407
-            asset=code-server-4.135.0-linux-arm64.tar.gz
-            dir=code-server-4.135.0-linux-arm64
-            server_sha=fe6561798415e709109cb902dca2a57a687240af7d8220f6fa1d01cd2ae0541e
-            ;;
-          *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
-        esac
-        curl -fsSL "https://update.code.visualstudio.com/1.135.0/$code_target/stable" -o /tmp/vscode-cli.tar.gz
-        echo "$code_sha  /tmp/vscode-cli.tar.gz" | sha256sum -c -
-        tar -C /usr/local/bin -xzf /tmp/vscode-cli.tar.gz code
-        cat > /usr/local/bin/vscode-server <<'EOF'
-        #!/bin/sh
-        exec code tunnel "$@"
-        EOF
-        chmod 0755 /usr/local/bin/vscode-server
-        curl -fsSL "https://github.com/coder/code-server/releases/download/v4.135.0/$asset" -o /tmp/code-server.tar.gz
-        echo "$server_sha  /tmp/code-server.tar.gz" | sha256sum -c -
-        tar -C /opt -xzf /tmp/code-server.tar.gz
-        ln -sf "/opt/$dir/bin/code-server" /usr/local/bin/code-server
-        code --version
-        code-server --version
+
     - description: Clone Builder Methods Agent OS for the agent user and expose every script globally.
       user: "0"
       command: |
@@ -415,14 +355,7 @@ setup:
           "-c",
           "pgrep -x sshd >/dev/null || { mkdir -p /var/run/sshd && /usr/sbin/sshd > /tmp/sshd.log 2>&1; }",
         ]
-    - description: Start VS Code server on the mounted workspace.
-      user: "1000"
-      command:
-        [
-          "sh",
-          "-c",
-          "pgrep -f 'code-server.*0.0.0.0:8080' >/dev/null || nohup code-server --bind-addr 0.0.0.0:8080 --auth none '${WORKDIR}' > /tmp/code-server.log 2>&1 &",
-        ]
+
   files:
     - path: /home/agent/.local/bin/codex
       mode: "0755"

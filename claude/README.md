@@ -19,9 +19,10 @@ The built-in Claude agent supplies the `anthropic` and `github` credentials. Thi
 
 Builder Methods Agent OS is cloned to `/home/agent/agent-os`. `/usr/local/bin` contains direct aliases for `agent-os-project-install`, `agent-os-sync-to-profile`, and `agent-os-common-functions`. Change into a project and run `agent-os-project-install` to install it there.
 
-Use `sbx ports <sandbox>` to discover code-server's mapped port. Microsoft's VS
-Code tunnel is started manually with `vscode-server`; browser code-server starts
-automatically on container port 8080.
+VS Code is no longer part of this kit. Stack the `claude-code` mixin alongside
+it for browser-based code-server on port 8080 plus the Microsoft VS Code CLI
+tunnel; splitting the two ~250&nbsp;MB downloads out is a large part of why this
+kit now launches quickly.
 
 Claude Code's self-updater is disabled (`DISABLE_AUTOUPDATER=1`). The kit
 installs its launcher at `/home/agent/.local/bin/claude` — the same path the

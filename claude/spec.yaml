@@ -34,7 +34,7 @@ agentInstructions:
     - `cloudflared` for tunnels. `openspec`. `codemap`.
     - `agent-os-project-install` — cd into a project and run it to install Builder Methods Agent OS there. Clone lives at `/home/agent/agent-os`; `agent-os-sync-to-profile` and `agent-os-common-functions` are alongside it.
     - `playwright` — the CLI is installed but ships no browser. Before the first browser run, install one: `playwright install --with-deps chromium`. It lands in `~/.cache/ms-playwright` and takes a couple of minutes, so do it only when the task actually needs a browser.
-    - `nvim` (AstroNvim). `code-server` serves the workspace on container port 8080; `vscode-server` opens a Microsoft tunnel on demand.
+    - `nvim` with AstroNvim.
     - Node 24, `bun`/`bunx`, `typescript-language-server`, `pyright-langserver`.
 
     ### Git signing
@@ -69,10 +69,7 @@ permissions:
       - astral.sh
       - files.pythonhosted.org
       - nodejs.org
-      - update.code.visualstudio.com
       # update.code.visualstudio.com/<ver>/<target>/stable is a 302 to this
-      # asset host; without it the VS Code CLI install fails under deny-all.
-      - vscode.download.prss.microsoft.com
       - archive.ubuntu.com
       - security.ubuntu.com
       - ports.ubuntu.com
@@ -85,9 +82,6 @@ permissions:
       - api.jina.ai
       - r.jina.ai
       - api.perplexity.ai
-      - code-server.dev
-      - open-vsx.org
-      - openvsx.eclipsecontent.org
       - mcp.docs.astro.build
       - shopify.dev
       - partners.shopify.com
@@ -151,9 +145,6 @@ environment:
     CLAUDE_CODE_EFFORT_LEVEL: xhigh
 
 ports:
-  - container: 8080
-    protocol: tcp
-    name: vscode-server
 
 setup:
   install:
@@ -288,40 +279,7 @@ setup:
         git -C /home/agent/.config/nvim checkout 49a7161b776f8bc6c23508819ea1ad4e7b359bee
         rm -rf /home/agent/.config/nvim/.git
         chown -R agent:agent /home/agent/.config
-    - description: Install pinned Microsoft VS Code CLI/server and browser-based code-server.
-      user: "0"
-      command: |
-        set -eu
-        arch=$(dpkg --print-architecture)
-        case "$arch" in
-          amd64)
-            code_target=cli-linux-x64
-            code_sha=fb1ad570680a4b9c6054edd3b12881939b6991001204d96462071f55259dec00
-            asset=code-server-4.135.0-linux-amd64.tar.gz
-            dir=code-server-4.135.0-linux-amd64
-            server_sha=300ef4e37e469e6368a4673c6a623e1c9ba8a34f42b394fb49c431a8900bc7d1
-            ;;
-          arm64)
-            code_target=cli-linux-arm64
-            code_sha=f1596118d027f71051ebb7b35385b98a3a892f183c70ca5cc4ca4eb848e53407
-            asset=code-server-4.135.0-linux-arm64.tar.gz
-            dir=code-server-4.135.0-linux-arm64
-            server_sha=fe6561798415e709109cb902dca2a57a687240af7d8220f6fa1d01cd2ae0541e
-            ;;
-          *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
-        esac
-        curl -fsSL "https://update.code.visualstudio.com/1.135.0/$code_target/stable" -o /tmp/vscode-cli.tar.gz
-        echo "$code_sha  /tmp/vscode-cli.tar.gz" | sha256sum -c -
-        tar -C /usr/local/bin -xzf /tmp/vscode-cli.tar.gz code
-        cat > /usr/local/bin/vscode-server <<'EOF'
-        #!/bin/sh
-        exec code tunnel "$@"
-        EOF
-        chmod 0755 /usr/local/bin/vscode-server
-        curl -fsSL "https://github.com/coder/code-server/releases/download/v4.135.0/$asset" -o /tmp/code-server.tar.gz
-        echo "$server_sha  /tmp/code-server.tar.gz" | sha256sum -c -
-        tar -C /opt -xzf /tmp/code-server.tar.gz
-        ln -sf "/opt/$dir/bin/code-server" /usr/local/bin/code-server
+
     - description: Clone Builder Methods Agent OS for the agent user and expose every script globally.
       user: "0"
       command: |
@@ -355,14 +313,7 @@ setup:
           "-c",
           "i=0; while [ $i -lt 60 ] && ! grep -q themeId /home/agent/.claude/settings.json 2>/dev/null; do sleep 1; i=$((i+1)); done; python3 /home/agent/.local/bin/apply-workstation-settings || true; python3 /home/agent/.local/bin/install-observability-hooks claude || true; python3 /home/agent/.local/bin/agent-observe-hook --flush >/dev/null 2>&1 || true",
         ]
-    - description: Start VS Code server on the mounted workspace.
-      user: "1000"
-      command:
-        [
-          "sh",
-          "-c",
-          "nohup /home/agent/.local/bin/start-code-server >> /tmp/code-server.log 2>&1 &",
-        ]
+
   files:
     - path: /home/agent/.local/bin/apply-workstation-settings
       mode: "0755"
@@ -392,20 +343,7 @@ setup:
         temporary = path.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(settings, indent=2) + "\n")
         temporary.replace(path)
-    - path: /home/agent/.local/bin/start-code-server
-      mode: "0755"
-      description: Start code-server on the workspace. ${WORKDIR} is substituted in setup.files content, which startup argv does not get, so the path is baked in here.
-      content: |
-        #!/bin/sh
-        # Guard on a pidfile: `pgrep -f` also matches the startup shell's own
-        # command line, and the running process is named "node", so neither
-        # pgrep form distinguishes a live server from this very invocation.
-        pidfile=/tmp/code-server.pid
-        if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null; then
-          exit 0
-        fi
-        echo $$ > "$pidfile"
-        exec code-server --bind-addr 0.0.0.0:8080 --auth none "${WORKDIR}"
+
     - path: /home/agent/.local/bin/claude-acp
       mode: "0755"
       description: Launch the pinned Claude ACP adapter.

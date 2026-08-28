@@ -1,0 +1,99 @@
+schemaVersion: "2"
+kind: mixin
+name: pi-code
+displayName: Pi workstation + VS Code
+description: Adds browser-based code-server on port 8080 and the Microsoft VS Code CLI tunnel to the Pi sandbox. Stack it alongside the pi kit, which no longer carries either.
+
+requires:
+  agent: pi
+
+agentInstructions:
+  content: |
+    ## VS Code in this sandbox
+
+    `code-server` serves the workspace over HTTP on container port 8080 and starts on its own. Ask the user to run `sbx ports <sandbox>` on the host to find the mapped port; the sandbox cannot publish it for them.
+
+    It runs with `--auth none`, which is safe only because sbx publishes host ports on `127.0.0.1` by default. Say so before suggesting the user publish it to a non-loopback address, since that would expose an unauthenticated editor with a terminal.
+
+    `vscode-server` opens a Microsoft VS Code tunnel instead, on demand. It is not started automatically and needs an interactive Microsoft or GitHub sign-in, so hand that step to the user rather than attempting it.
+
+permissions:
+  network:
+    allow:
+      # code-server release tarball, pinned and SHA-verified.
+      - github.com
+      - objects.githubusercontent.com
+      - release-assets.githubusercontent.com
+      # update.code.visualstudio.com 302s to the prss asset host, so the CLI
+      # download needs both entries.
+      - update.code.visualstudio.com
+      - vscode.download.prss.microsoft.com
+      # Extension marketplace: the API host and the content host differ.
+      - open-vsx.org
+      - openvsx.eclipsecontent.org
+
+ports:
+  - container: 8080
+    protocol: tcp
+    name: code-server
+
+setup:
+  install:
+    - description: Install pinned Microsoft VS Code CLI/server and browser-based code-server.
+      user: "0"
+      command: |
+        set -eu
+        arch=$(dpkg --print-architecture)
+        case "$arch" in
+          amd64)
+            code_target=cli-linux-x64
+            code_sha=fb1ad570680a4b9c6054edd3b12881939b6991001204d96462071f55259dec00
+            asset=code-server-4.135.0-linux-amd64.tar.gz
+            dir=code-server-4.135.0-linux-amd64
+            server_sha=300ef4e37e469e6368a4673c6a623e1c9ba8a34f42b394fb49c431a8900bc7d1
+            ;;
+          arm64)
+            code_target=cli-linux-arm64
+            code_sha=f1596118d027f71051ebb7b35385b98a3a892f183c70ca5cc4ca4eb848e53407
+            asset=code-server-4.135.0-linux-arm64.tar.gz
+            dir=code-server-4.135.0-linux-arm64
+            server_sha=fe6561798415e709109cb902dca2a57a687240af7d8220f6fa1d01cd2ae0541e
+            ;;
+          *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
+        esac
+        curl -fsSL "https://update.code.visualstudio.com/1.135.0/$code_target/stable" -o /tmp/vscode-cli.tar.gz
+        echo "$code_sha  /tmp/vscode-cli.tar.gz" | sha256sum -c -
+        tar -C /usr/local/bin -xzf /tmp/vscode-cli.tar.gz code
+        cat > /usr/local/bin/vscode-server <<'EOF'
+        #!/bin/sh
+        exec code tunnel "$@"
+        EOF
+        chmod 0755 /usr/local/bin/vscode-server
+        curl -fsSL "https://github.com/coder/code-server/releases/download/v4.135.0/$asset" -o /tmp/code-server.tar.gz
+        echo "$server_sha  /tmp/code-server.tar.gz" | sha256sum -c -
+        tar -C /opt -xzf /tmp/code-server.tar.gz
+        ln -sf "/opt/$dir/bin/code-server" /usr/local/bin/code-server
+  startup:
+    - description: Start code-server on the mounted workspace.
+      user: "1000"
+      command:
+        [
+          "sh",
+          "-c",
+          "nohup /home/agent/.local/bin/start-code-server >> /tmp/code-server.log 2>&1 &",
+        ]
+  files:
+    - path: /home/agent/.local/bin/start-code-server
+      mode: "0755"
+      description: Start code-server on the workspace. ${WORKDIR} is substituted in setup.files content, which startup argv does not get, so the path is baked in here.
+      content: |
+        #!/bin/sh
+        # Guard on a pidfile: `pgrep -f` also matches the startup shell's own
+        # command line, and the running process is named "node", so neither
+        # pgrep form distinguishes a live server from this very invocation.
+        pidfile=/tmp/code-server.pid
+        if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null; then
+          exit 0
+        fi
+        echo $$ > "$pidfile"
+        exec code-server --bind-addr 0.0.0.0:8080 --auth none "${WORKDIR}"
