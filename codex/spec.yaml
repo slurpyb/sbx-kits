@@ -11,22 +11,47 @@ agentInstructions:
   content: |
     ## Docker Sandbox workstation
 
-    You are running inside a Docker Sandbox, not directly on the host. The workspace is mounted into the sandbox. `sudo` is passwordless. Credentials are supplied by Docker Sandbox; proxy-managed values are sentinels and must never be printed, copied, persisted, or used for interactive login. The kit adds no network deny rules. Organization or local Docker Sandbox governance can still restrict egress; inspect a 403 response and `sbx policy log` on the host when a destination is blocked.
+    You are inside a Docker Sandbox, not on the host. `sudo` needs no password, and everything you install lasts only as long as this sandbox.
 
-    The default model is `gpt-5.6-sol` with reasoning effort `high`. Codex ACP is available as `codex-acp`. Codex app-server is available through SSH on port 22; discover the host port with `sbx ports <sandbox>` and connect as user `agent`.
+    Default model `gpt-5.6-sol` at `high` reasoning effort. The Codex ACP adapter is `codex-acp`. Codex app-server listens on container port 22 over SSH: find the host port with `sbx ports <sandbox>` and connect as `agent`.
 
-    Installed commands available to interactive and non-interactive processes through `/usr/local/bin` include: `bun`, `bunx`, `fnm`, Node.js 24 (`node`, `npm`, `npx`, `corepack`), `nvim` with AstroNvim, Microsoft `code`/`vscode-server` and browser-based `code-server`, `playwright`, `ol` (Outline), `lin` (Linear), `shopify`, `cloudflared`, `firecrawl`, `jina`/`jina-cli`, `codemap`, `openspec`, Builder Methods Agent OS commands (`agent-os-project-install`, `agent-os-sync-to-profile`, `agent-os-common-functions`), `pplx`/`perplexity-cli`, `typescript-language-server`, `pyright-langserver`, and the Shopify Liquid language server through `shopify theme language-server`. Chromium is installed at `/opt/ms-playwright`; `PLAYWRIGHT_BROWSERS_PATH` is already set.
+    ### Credentials are sentinels
 
-    GitHub SSH host keys are preloaded. The host SSH agent is forwarded for GitHub authentication and automatic SSH commit/tag signing. If signing fails, verify `SSH_AUTH_SOCK` and `ssh-add -L` before changing Git config.
+    Credential variables hold **sentinel** placeholders, not secrets. Use them as ordinary environment variables and let the sandbox proxy swap the real value in for approved hosts. Keep each sentinel inside the process that reads it: pass the variable, and let a failed call fail. Never echo, log, commit, or paste one into an interactive login.
 
-    The built-in Codex agent supplies `OPENAI_API_KEY` and `GH_TOKEN`. This mixin only adds credentials for `OUTLINE_API_TOKEN`, `LINEAR_API_KEY`, `SHOPIFY_CLI_THEME_TOKEN`, `TUNNEL_TOKEN`, `FIRECRAWL_API_KEY`, `JINA_API_KEY`, and `PERPLEXITY_API_KEY`.
+    The built-in Codex agent supplies `OPENAI_API_KEY` and `GH_TOKEN`. This kit adds `OUTLINE_API_TOKEN`, `LINEAR_API_KEY`, `SHOPIFY_CLI_THEME_TOKEN`, `TUNNEL_TOKEN`, `FIRECRAWL_API_KEY`, `JINA_API_KEY`, and `PERPLEXITY_API_KEY`.
 
-    Builder Methods Agent OS is cloned at `/home/agent/agent-os`, with direct `/usr/local/bin` aliases named `agent-os-project-install`, `agent-os-sync-to-profile`, and `agent-os-common-functions`. Change into a project and run `agent-os-project-install` to install it there. `ol`, `lin`, `shopify`, `firecrawl`, `jina`, and `pplx` may require their corresponding credential and/or one-time configuration before first use.
+    ### A 403 is a policy rule, not a bug
 
-    Native harness hooks send prompts, assistant messages, tool activity, and transcript deltas to `AGENT_OBSERVABILITY_URL` (default `http://host.docker.internal:8000`). If its `/healthcheck` is unavailable, events are written to `/home/agent/logs/<session-id>/events.jsonl` and retried later. Create `/home/agent/.never-output-hooks` to disable all output immediately. The host dashboard is in this repository's `observability/` directory.
+    Egress is allowlisted. Read the response body of any 403: it names the rule and the reason. This kit adds no deny rules, so a block means the host is absent from the allowlist or org governance is overriding it. Give the user the exact host — they run `sbx policy log` to confirm and `sbx policy allow network <host>` to fix it. Treat the block as final for this session: mirrors, retries, and alternate ports hit the same proxy.
 
-    On entering an Astro project, immediately add the Astro docs MCP server: `codex mcp add astro-docs --url https://mcp.docs.astro.build/mcp`. On entering a Shopify project, immediately add Shopify Dev MCP: `codex mcp add shopify-dev -- npx -y @shopify/dev-mcp@1.14.6`. On entering a Panda CSS project, immediately add Panda MCP: `codex mcp add panda -- npx -y @pandacss/mcp@1.12.0`. Do this before substantive project work, but do not duplicate an existing server registration.
+    ### Installed on top of the base agent
 
+    Reach for these by name; they are not in the base image.
+
+    - `ol` Outline · `lin` Linear · `pplx` Perplexity · `firecrawl` · `jina` — each needs its token below, and some need a one-time `login`/`init` before first use.
+    - `shopify` Shopify CLI; the Liquid language server is `shopify theme language-server`.
+    - `cloudflared` for tunnels. `openspec`. `codemap`.
+    - `agent-os-project-install` — cd into a project and run it to install Builder Methods Agent OS there. Clone lives at `/home/agent/agent-os`; `agent-os-sync-to-profile` and `agent-os-common-functions` are alongside it.
+    - `playwright` with Chromium already at `/opt/ms-playwright` — go straight to scripting; `playwright install` is redundant.
+    - `nvim` (AstroNvim). `code-server` serves the workspace on container port 8080; `vscode-server` opens a Microsoft tunnel on demand.
+    - Node 24, `bun`/`bunx`, `typescript-language-server`, `pyright-langserver`.
+
+    ### Git signing
+
+    Commits and tags sign automatically with the forwarded host SSH key, and GitHub host keys are preloaded. When signing fails the cause is almost always the agent forward, so check `SSH_AUTH_SOCK` and `ssh-add -L` first and report what you find. The signing config is set system-wide and correct; leave it as it is.
+
+    ### Observability
+
+    Hooks stream prompts, assistant messages, tool activity, and transcript deltas to `AGENT_OBSERVABILITY_URL` (default `http://host.docker.internal:8000`), buffering to `/home/agent/logs/<session-id>/events.jsonl` whenever it is unreachable. Create `/home/agent/.never-output-hooks` to stop capture.
+
+    ### Project-triggered MCP servers
+
+    Check the project root once, before starting substantive work, and register what matches. Run `codex mcp list` first and add only what is missing.
+
+    - `astro.config.*` present → `codex mcp add astro-docs --url https://mcp.docs.astro.build/mcp`
+    - `shopify.app.toml`, or `sections/` beside `templates/` → `codex mcp add shopify-dev -- npx -y @shopify/dev-mcp@1.14.6`
+    - `panda.config.*` present → `codex mcp add panda -- npx -y @pandacss/mcp@1.12.0`
 permissions:
   network:
     allow:

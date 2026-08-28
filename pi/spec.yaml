@@ -12,7 +12,23 @@ sandbox:
 agentInstructions:
   filename: AGENTS.md
   content: |
-    You are running inside a Docker Sandbox. Credential environment variables are proxy-managed sentinels: use them normally, but never print, persist, replace, or use them to log in; the sandbox proxy substitutes real credentials only for approved hosts. Network access is allowlisted, and a 403 usually means the destination needs an explicit kit policy rule. Prefer Bun over npm/Node.js when practical. Use `uv` for Python environments, dependencies, and tools. Bun, OpenSpec, uv, Pi extensions, code-server, GitHub CLI, and Docker are available.
+    ## Docker Sandbox
+
+    You are inside a Docker Sandbox, not on the host. `sudo` needs no password, and everything you install lasts only as long as this sandbox.
+
+    Pi defaults to provider `openai-codex`, model `gpt-5.6-sol`, thinking level `high`.
+
+    ### Credentials are sentinels
+
+    Credential variables hold **sentinel** placeholders, not secrets. Use them as ordinary environment variables and let the sandbox proxy swap the real value in for approved hosts. Keep each sentinel inside the process that reads it: pass the variable, and let a failed call fail. Never echo, log, commit, or paste one into an interactive login. Available here: `OPENAI_API_KEY`, `GEMINI_API_KEY`, `GH_TOKEN`, `OPENCODE_API_KEY`.
+
+    ### A 403 is a policy rule, not a bug
+
+    Egress is allowlisted. Read the response body of any 403: it names the rule and the reason. Give the user the exact host — they run `sbx policy log` to confirm and `sbx policy allow network <host>` to fix it. Treat the block as final for this session: mirrors, retries, and alternate ports hit the same proxy.
+
+    ### Tooling
+
+    Prefer `bun` over npm and Node. Use `uv` for Python environments, dependencies, and tools. `openspec`, `gh`, and `docker` are installed, and `code-server` serves the workspace on container port 8080 — find the host port with `sbx ports <sandbox>`.
 permissions:
   network:
     allow:

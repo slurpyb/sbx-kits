@@ -11,22 +11,47 @@ agentInstructions:
   content: |
     ## Docker Sandbox workstation
 
-    You are running inside a Docker Sandbox, not directly on the host. The workspace is mounted into the sandbox. `sudo` is passwordless. Credentials are supplied by Docker Sandbox; proxy-managed values are sentinels and must never be printed, copied, persisted, or used for interactive login. The kit adds no network deny rules. Organization or local Docker Sandbox governance can still restrict egress; inspect a 403 response and `sbx policy log` on the host when a destination is blocked.
+    You are inside a Docker Sandbox, not on the host. `sudo` needs no password, and everything you install lasts only as long as this sandbox.
 
-    The default model is `claude-opus-5` with effort `xhigh`. Claude ACP is available as `claude-acp`.
+    Default model `claude-opus-5` at `xhigh` effort. The Claude ACP adapter is `claude-acp`.
 
-    Installed commands available to interactive and non-interactive processes through `/usr/local/bin` include: `bun`, `bunx`, `fnm`, Node.js 24 (`node`, `npm`, `npx`, `corepack`), `nvim` with AstroNvim, Microsoft `code`/`vscode-server` and browser-based `code-server`, `playwright`, `ol` (Outline), `lin` (Linear), `shopify`, `cloudflared`, `firecrawl`, `jina`/`jina-cli`, `codemap`, `openspec`, Builder Methods Agent OS commands (`agent-os-project-install`, `agent-os-sync-to-profile`, `agent-os-common-functions`), `pplx`/`perplexity-cli`, `typescript-language-server`, `pyright-langserver`, and the Shopify Liquid language server through `shopify theme language-server`. Chromium is installed at `/opt/ms-playwright`; `PLAYWRIGHT_BROWSERS_PATH` is already set.
+    ### Credentials are sentinels
 
-    GitHub SSH host keys are preloaded. The host SSH agent is forwarded for GitHub authentication and automatic SSH commit/tag signing. If signing fails, verify `SSH_AUTH_SOCK` and `ssh-add -L` before changing Git config.
+    Credential variables hold **sentinel** placeholders, not secrets. Use them as ordinary environment variables and let the sandbox proxy swap the real value in for approved hosts. Keep each sentinel inside the process that reads it: pass the variable, and let a failed call fail. Never echo, log, commit, or paste one into an interactive login.
 
-    The built-in Claude agent supplies `ANTHROPIC_API_KEY` and `GH_TOKEN`. This mixin only adds credentials for `OUTLINE_API_TOKEN`, `LINEAR_API_KEY`, `SHOPIFY_CLI_THEME_TOKEN`, `TUNNEL_TOKEN`, `FIRECRAWL_API_KEY`, `JINA_API_KEY`, and `PERPLEXITY_API_KEY`.
+    The built-in Claude agent supplies `ANTHROPIC_API_KEY` and `GH_TOKEN`. This kit adds `OUTLINE_API_TOKEN`, `LINEAR_API_KEY`, `SHOPIFY_CLI_THEME_TOKEN`, `TUNNEL_TOKEN`, `FIRECRAWL_API_KEY`, `JINA_API_KEY`, and `PERPLEXITY_API_KEY`.
 
-    Builder Methods Agent OS is cloned at `/home/agent/agent-os`, with direct `/usr/local/bin` aliases named `agent-os-project-install`, `agent-os-sync-to-profile`, and `agent-os-common-functions`. Change into a project and run `agent-os-project-install` to install it there. `ol`, `lin`, `shopify`, `firecrawl`, `jina`, and `pplx` may require their corresponding credential and/or one-time configuration before first use.
+    ### A 403 is a policy rule, not a bug
 
-    Native harness hooks send prompts, assistant messages, tool activity, and transcript deltas to `AGENT_OBSERVABILITY_URL` (default `http://host.docker.internal:8000`). If its `/healthcheck` is unavailable, events are written to `/home/agent/logs/<session-id>/events.jsonl` and retried later. Create `/home/agent/.never-output-hooks` to disable all output immediately. The host dashboard is in this repository's `observability/` directory.
+    Egress is allowlisted. Read the response body of any 403: it names the rule and the reason. This kit adds no deny rules, so a block means the host is absent from the allowlist or org governance is overriding it. Give the user the exact host — they run `sbx policy log` to confirm and `sbx policy allow network <host>` to fix it. Treat the block as final for this session: mirrors, retries, and alternate ports hit the same proxy.
 
-    On entering an Astro project, immediately add the Astro docs MCP server: `claude mcp add --transport http astro-docs https://mcp.docs.astro.build/mcp`. On entering a Shopify project, immediately add Shopify Dev MCP: `claude mcp add --transport stdio shopify-dev -- npx -y @shopify/dev-mcp@1.14.6`. On entering a Panda CSS project, immediately add Panda MCP: `claude mcp add --transport stdio panda -- npx -y @pandacss/mcp@1.12.0`. Do this before substantive project work, but do not duplicate an existing server registration.
+    ### Installed on top of the base agent
 
+    Reach for these by name; they are not in the base image.
+
+    - `ol` Outline · `lin` Linear · `pplx` Perplexity · `firecrawl` · `jina` — each needs its token below, and some need a one-time `login`/`init` before first use.
+    - `shopify` Shopify CLI; the Liquid language server is `shopify theme language-server`.
+    - `cloudflared` for tunnels. `openspec`. `codemap`.
+    - `agent-os-project-install` — cd into a project and run it to install Builder Methods Agent OS there. Clone lives at `/home/agent/agent-os`; `agent-os-sync-to-profile` and `agent-os-common-functions` are alongside it.
+    - `playwright` — the CLI is installed but ships no browser. Before the first browser run, install one: `playwright install --with-deps chromium`. It lands in `~/.cache/ms-playwright` and takes a couple of minutes, so do it only when the task actually needs a browser.
+    - `nvim` (AstroNvim). `code-server` serves the workspace on container port 8080; `vscode-server` opens a Microsoft tunnel on demand.
+    - Node 24, `bun`/`bunx`, `typescript-language-server`, `pyright-langserver`.
+
+    ### Git signing
+
+    Commits and tags sign automatically with the forwarded host SSH key, and GitHub host keys are preloaded. When signing fails the cause is almost always the agent forward, so check `SSH_AUTH_SOCK` and `ssh-add -L` first and report what you find. The signing config is set system-wide and correct; leave it as it is.
+
+    ### Observability
+
+    Hooks stream prompts, assistant messages, tool activity, and transcript deltas to `AGENT_OBSERVABILITY_URL` (default `http://host.docker.internal:8000`), buffering to `/home/agent/logs/<session-id>/events.jsonl` whenever it is unreachable. Create `/home/agent/.never-output-hooks` to stop capture.
+
+    ### Project-triggered MCP servers
+
+    Check the project root once, before starting substantive work, and register what matches. Run `claude mcp list` first and add only what is missing.
+
+    - `astro.config.*` present → `claude mcp add --transport http astro-docs https://mcp.docs.astro.build/mcp`
+    - `shopify.app.toml`, or `sections/` beside `templates/` → `claude mcp add --transport stdio shopify-dev -- npx -y @shopify/dev-mcp@1.14.6`
+    - `panda.config.*` present → `claude mcp add --transport stdio panda -- npx -y @pandacss/mcp@1.12.0`
 permissions:
   network:
     allow:
@@ -120,14 +145,9 @@ environment:
     FNM_DIR: /opt/fnm
     BUN_INSTALL: /opt/bun
     AGENT_OBSERVABILITY_URL: http://host.docker.internal:8000
-    PLAYWRIGHT_BROWSERS_PATH: /opt/ms-playwright
     NODE_PATH: /usr/local/lib/node_modules
-    # Claude Code's self-updater rewrites /home/agent/.local/bin/claude, which
-    # is exactly where this kit installs its launcher wrapper. Left enabled it
-    # replaces the wrapper mid-session, pins claude-real to the create-time
-    # build forever, and dangles claude-real outright once that build is
-    # pruned. The sandbox tracks the base image's Claude version instead.
-    DISABLE_AUTOUPDATER: "1"
+    ANTHROPIC_DEFAULT_MODEL: claude-opus-5
+    CLAUDE_CODE_EFFORT_LEVEL: xhigh
 
 ports:
   - container: 8080
@@ -136,19 +156,6 @@ ports:
 
 setup:
   install:
-    - description: Preserve the built-in Claude executable before installing the default-model wrapper.
-      user: "0"
-      command: |
-        set -eu
-        bin=/home/agent/.local/bin
-        # Idempotent by design. install re-runs on `sbx kit add` and on a
-        # sandbox created from a template that already captured the wrapper;
-        # there $bin/claude is our own shim, and moving it onto claude-real
-        # would make the launcher exec itself forever.
-        if [ ! -e "$bin/claude-real" ] && [ ! -L "$bin/claude-real" ]; then
-          test -x "$bin/claude"
-          mv "$bin/claude" "$bin/claude-real"
-        fi
     - description: Install base OS dependencies, SSH server, and GitHub SSH trust.
       user: "0"
       command: |
@@ -156,7 +163,7 @@ setup:
         attempt=0
         until apt-get update -qq; do attempt=$((attempt + 1)); [ "$attempt" -lt 240 ]; sleep 0.5; done
         attempt=0
-        until DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential ca-certificates curl git jq openssh-server python3 python3-venv python3-pip ripgrep unzip xz-utils; do attempt=$((attempt + 1)); [ "$attempt" -lt 240 ]; sleep 0.5; done
+        until DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends build-essential ca-certificates curl git jq openssh-server python3 python3-venv python3-pip ripgrep unzip xz-utils; do attempt=$((attempt + 1)); [ "$attempt" -lt 240 ]; sleep 0.5; done
         ssh-keygen -A
         install -d -m 0700 -o agent -g agent /home/agent/.ssh
         curl -fsSL https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' > /home/agent/.ssh/known_hosts
@@ -186,7 +193,6 @@ setup:
         export FNM_DIR=/opt/fnm
         export PATH="/usr/local/bin:$PATH"
         EOF
-        node --version | grep -E '^v24\.'
     - description: Install pinned Bun system-wide.
       user: "0"
       command: |
@@ -206,17 +212,14 @@ setup:
         ln -sf /opt/bun/bin/bun /usr/local/bin/bunx
         BUN_INSTALL=/opt/bun bun install -g @fission-ai/openspec@1.11.0
         ln -sf /opt/bun/bin/openspec /usr/local/bin/openspec
-        bun --version
-        openspec --version >/dev/null
-    - description: Install requested JavaScript CLIs, language servers, OpenSpec, and Playwright.
+    - description: Install requested JavaScript CLIs and language servers via bun.
       user: "0"
       command: |
         set -eu
-        npm config set prefix /usr/local
-        if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy "$HTTP_PROXY"; npm config set https-proxy "${HTTPS_PROXY:-$HTTP_PROXY}"; fi
-        # These packages need their lifecycle scripts (esbuild and
-        # outline-cli fetch platform binaries), which npm runs by default.
-        npm install -g \
+        # bun, not npm: same packages, a fraction of the wall time. --trust
+        # runs the lifecycle scripts esbuild and outline-cli need for their
+        # platform binaries, which bun otherwise skips.
+        BUN_INSTALL=/opt/bun bun install -g --trust \
           @doist/outline-cli@2.0.1 \
           @linear/cli@0.0.5 \
           @shopify/cli@4.7.0 \
@@ -226,22 +229,16 @@ setup:
           pyright@1.1.413 \
           typescript@7.0.2 \
           typescript-language-server@6.0.0
-        npm_bin=$(npm prefix -g)/bin
         for bin in ol lin shopify firecrawl playwright pyright pyright-langserver tsc tsserver typescript-language-server; do
-          [ ! -e "$npm_bin/$bin" ] || ln -sf "$npm_bin/$bin" "/usr/local/bin/$bin"
+          [ ! -e "/opt/bun/bin/$bin" ] || ln -sf "/opt/bun/bin/$bin" "/usr/local/bin/$bin"
         done
-        export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
-        playwright install --with-deps chromium
-        chown -R agent:agent /opt/ms-playwright
-        chmod -R a+rX /opt/ms-playwright
-        ln -sf "$(command -v ol)" /usr/local/bin/outline
-        ln -sf "$(command -v lin)" /usr/local/bin/linear
+        ln -sf /opt/bun/bin/ol /usr/local/bin/outline
+        ln -sf /opt/bun/bin/lin /usr/local/bin/linear
         cat > /usr/local/bin/liquid-language-server <<'EOF'
         #!/bin/sh
         exec shopify theme language-server "$@"
         EOF
         chmod 0755 /usr/local/bin/liquid-language-server
-        for bin in ol outline openspec lin linear shopify liquid-language-server firecrawl playwright pyright-langserver typescript-language-server; do command -v "$bin" >/dev/null; done
     - description: Install pinned Jina CLI and CodeMap in isolated Python environments.
       user: "0"
       command: |
@@ -254,8 +251,6 @@ setup:
         /opt/codemap/bin/pip install --no-cache-dir codemap==0.3.0
         ln -sf /opt/codemap/bin/codemap /usr/local/bin/codemap
         [ ! -x /opt/codemap/bin/cm ] || ln -sf /opt/codemap/bin/cm /usr/local/bin/cm
-        jina --help >/dev/null
-        codemap --help >/dev/null
     - description: Install pinned cloudflared and Perplexity CLI binaries.
       user: "0"
       command: |
@@ -283,8 +278,6 @@ setup:
         echo "$pplx_sha  /tmp/pplx" | sha256sum -c -
         install -m 0755 /tmp/pplx /usr/local/bin/pplx
         ln -sf /usr/local/bin/pplx /usr/local/bin/perplexity-cli
-        cloudflared --version
-        pplx --help >/dev/null
     - description: Install pinned Neovim and AstroNvim for the agent user.
       user: "0"
       command: |
@@ -304,12 +297,6 @@ setup:
         git -C /home/agent/.config/nvim checkout 49a7161b776f8bc6c23508819ea1ad4e7b359bee
         rm -rf /home/agent/.config/nvim/.git
         chown -R agent:agent /home/agent/.config
-        nvim --version | head -1
-    - description: Pre-install AstroNvim plugins as the agent user.
-      user: "1000"
-      command: |
-        set -eu
-        HOME=/home/agent nvim --headless '+Lazy! sync' +qa
     - description: Install pinned Microsoft VS Code CLI/server and browser-based code-server.
       user: "0"
       command: |
@@ -344,8 +331,6 @@ setup:
         echo "$server_sha  /tmp/code-server.tar.gz" | sha256sum -c -
         tar -C /opt -xzf /tmp/code-server.tar.gz
         ln -sf "/opt/$dir/bin/code-server" /usr/local/bin/code-server
-        code --version
-        code-server --version
     - description: Clone Builder Methods Agent OS for the agent user and expose every script globally.
       user: "0"
       command: |
@@ -358,9 +343,6 @@ setup:
         ln -sfn /home/agent/agent-os/scripts/common-functions.sh /usr/local/bin/agent-os-common-functions
         # Upstream scripts source this filename relative to the invoked symlink.
         ln -sfn /home/agent/agent-os/scripts/common-functions.sh /usr/local/bin/common-functions.sh
-        su agent -s /bin/bash -c 'agent-os-project-install --help >/dev/null'
-        su agent -s /bin/bash -c 'agent-os-sync-to-profile --help >/dev/null'
-        command -v agent-os-common-functions >/dev/null
     - description: Configure automatic Git SSH commit and tag signing.
       user: "0"
       command: |
@@ -373,6 +355,15 @@ setup:
         git config --system gpg.ssh.allowedSignersFile /home/agent/.config/git/allowed_signers
         install -d -m 0755 -o agent -g agent /home/agent/.config/git
   startup:
+    - description: Install the observability hooks once the platform has written its own Claude settings.
+      user: "1000"
+      background: true
+      command:
+        [
+          "sh",
+          "-c",
+          "i=0; while [ $i -lt 60 ] && ! grep -q themeId /home/agent/.claude/settings.json 2>/dev/null; do sleep 1; i=$((i+1)); done; python3 /home/agent/.local/bin/install-observability-hooks claude || true; python3 /home/agent/.local/bin/agent-observe-hook --flush >/dev/null 2>&1 || true",
+        ]
     - description: Start VS Code server on the mounted workspace.
       user: "1000"
       command:
@@ -396,35 +387,13 @@ setup:
         fi
         echo $$ > "$pidfile"
         exec code-server --bind-addr 0.0.0.0:8080 --auth none "${WORKDIR}"
-    - path: /home/agent/.local/bin/claude
-      mode: "0755"
-      description: Apply the workstation defaults when the built-in Claude agent starts.
-      content: |
-        #!/bin/sh
-        exec /home/agent/.local/bin/claude-default "$@"
-    - path: /home/agent/.local/bin/claude-default
-      mode: "0755"
-      description: Start Claude Code with the requested default Opus 5 model and xhigh effort.
-      content: |
-        #!/bin/bash
-        export ANTHROPIC_DEFAULT_MODEL=claude-opus-5
-        export CLAUDE_CODE_EFFORT_LEVEL=xhigh
-        real=/home/agent/.local/bin/claude-real
-        # Belt and braces: if claude-real is ever missing or dangling, fall
-        # back to the newest installed build rather than failing to launch.
-        if [ ! -x "$real" ]; then
-          real=$(ls -1d /home/agent/.local/share/claude/versions/* 2>/dev/null | sort -V | tail -n 1)
-        fi
-        python3 /home/agent/.local/bin/install-observability-hooks claude || true
-        python3 /home/agent/.local/bin/agent-observe-hook --flush >/dev/null 2>&1 || true
-        exec "$real" --model claude-opus-5 --effort xhigh "$@"
     - path: /home/agent/.local/bin/claude-acp
       mode: "0755"
       description: Launch the pinned Claude ACP adapter.
       content: |
         #!/bin/bash
         set -e
-        export CLAUDE_CODE_EXECUTABLE=/home/agent/.local/bin/claude-default
+        export CLAUDE_CODE_EXECUTABLE=claude
         exec npx -y @agentclientprotocol/claude-agent-acp@0.70.0 "$@"
     - path: /home/agent/.config/git/ssh-signing-key-command
       mode: "0755"
