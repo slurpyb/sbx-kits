@@ -18,13 +18,13 @@ agentInstructions:
 
     The default model is `claude-opus-5` with effort `xhigh`. Claude ACP is available as `claude-acp`.
 
-    Installed commands available to interactive and non-interactive processes through `/usr/local/bin` include: `bun`, `bunx`, `fnm`, Node.js 24 (`node`, `npm`, `npx`, `corepack`), `nvim` with AstroNvim, Microsoft `code`/`vscode-server` and browser-based `code-server`, `playwright`, `ol` (Outline), `lin` (Linear), `shopify`, `cloudflared`, `firecrawl`, `jina`/`jina-cli`, `codemap`, `openspec`, Builder Methods `agent-os`, AgentOS `agentos`, `pplx`/`perplexity-cli`, `typescript-language-server`, `pyright-langserver`, and the Shopify Liquid language server through `shopify theme language-server`. Chromium is installed at `/opt/ms-playwright`; `PLAYWRIGHT_BROWSERS_PATH` is already set.
+    Installed commands available to interactive and non-interactive processes through `/usr/local/bin` include: `bun`, `bunx`, `fnm`, Node.js 24 (`node`, `npm`, `npx`, `corepack`), `nvim` with AstroNvim, Microsoft `code`/`vscode-server` and browser-based `code-server`, `playwright`, `ol` (Outline), `lin` (Linear), `shopify`, `cloudflared`, `firecrawl`, `jina`/`jina-cli`, `codemap`, `openspec`, Builder Methods Agent OS commands (`agent-os-project-install`, `agent-os-sync-to-profile`, `agent-os-common-functions`), `pplx`/`perplexity-cli`, `typescript-language-server`, `pyright-langserver`, and the Shopify Liquid language server through `shopify theme language-server`. Chromium is installed at `/opt/ms-playwright`; `PLAYWRIGHT_BROWSERS_PATH` is already set.
 
     GitHub SSH host keys are preloaded. The host SSH agent is forwarded for GitHub authentication and automatic SSH commit/tag signing. If signing fails, verify `SSH_AUTH_SOCK` and `ssh-add -L` before changing Git config.
 
-    Service credentials use these environment variables when configured on the host: `ANTHROPIC_API_KEY`, `GH_TOKEN`, `OUTLINE_API_TOKEN`, `LINEAR_API_KEY`, `SHOPIFY_CLI_THEME_TOKEN`, `TUNNEL_TOKEN`, `FIRECRAWL_API_KEY`, `JINA_API_KEY`, `AGENTOS_TOKEN`, and `PERPLEXITY_API_KEY`.
+    Service credentials use these environment variables when configured on the host: `ANTHROPIC_API_KEY`, `GH_TOKEN`, `OUTLINE_API_TOKEN`, `LINEAR_API_KEY`, `SHOPIFY_CLI_THEME_TOKEN`, `TUNNEL_TOKEN`, `FIRECRAWL_API_KEY`, `JINA_API_KEY`, and `PERPLEXITY_API_KEY`.
 
-    `agent-os` installs Builder Methods Agent OS into the current project. `ol`, `lin`, `shopify`, `firecrawl`, `jina`, and `pplx` may require their corresponding credential and/or one-time configuration before first use.
+    Builder Methods Agent OS is cloned at `/home/agent/agent-os`. Its scripts are exposed as `agent-os-project-install`, `agent-os-sync-to-profile`, and `agent-os-common-functions`; for example, run `agent-os-project-install .` to install it into the current project. `ol`, `lin`, `shopify`, `firecrawl`, `jina`, and `pplx` may require their corresponding credential and/or one-time configuration before first use.
 
     Native harness hooks send prompts, assistant messages, tool activity, and transcript deltas to `AGENT_OBSERVABILITY_URL` (default `http://host.docker.internal:8000`). If its `/healthcheck` is unavailable, events are written to `/home/agent/logs/<session-id>/events.jsonl` and retried later. Create `/home/agent/.never-output-hooks` to disable all output immediately. The host dashboard is in this repository's `observability/` directory.
 
@@ -71,8 +71,6 @@ permissions:
       - "*.myshopify.com"
       - cloudflare.com
       - api.cloudflare.com
-      - useagentos.com
-      - api.useagentos.com
       - host.docker.internal:8000
 
 credentials:
@@ -126,10 +124,6 @@ credentials:
     description: Jina AI API token.
     apiKey:
       name: JINA_API_KEY
-  - service: agentos
-    description: AgentOS authentication token.
-    apiKey:
-      name: AGENTOS_TOKEN
   - service: perplexity
     description: Perplexity API token for pplx.
     apiKey:
@@ -245,7 +239,7 @@ setup:
         EOF
         chmod 0755 /usr/local/bin/liquid-language-server
         for bin in ol outline openspec lin linear shopify liquid-language-server firecrawl playwright pyright-langserver typescript-language-server; do command -v "$bin" >/dev/null; done
-    - description: Install pinned Jina CLI, CodeMap, and AgentOS in isolated Python environments.
+    - description: Install pinned Jina CLI and CodeMap in isolated Python environments.
       user: "0"
       command: |
         set -eu
@@ -257,12 +251,8 @@ setup:
         /opt/codemap/bin/pip install --no-cache-dir codemap==0.3.0
         ln -sf /opt/codemap/bin/codemap /usr/local/bin/codemap
         [ ! -x /opt/codemap/bin/cm ] || ln -sf /opt/codemap/bin/cm /usr/local/bin/cm
-        python3 -m venv /opt/agentos
-        /opt/agentos/bin/pip install --no-cache-dir use-agent-os==2026.8.28
-        ln -sf /opt/agentos/bin/agentos /usr/local/bin/agentos
         jina --help >/dev/null
         codemap --help >/dev/null
-        agentos --help >/dev/null
     - description: Install pinned cloudflared and Perplexity CLI binaries.
       user: "0"
       command: |
@@ -353,19 +343,30 @@ setup:
         ln -sf "/opt/$dir/bin/code-server" /usr/local/bin/code-server
         code --version
         code-server --version
-    - description: Install Builder Methods Agent OS and a global project installer command.
+    - description: Clone Builder Methods Agent OS for the agent user and expose every script globally.
       user: "0"
       command: |
         set -eu
-        git clone https://github.com/buildermethods/agent-os.git /opt/agent-os
-        git -C /opt/agent-os checkout cae8e664fb59a01869718c3151e0f45b7a06a2fb
-        rm -rf /opt/agent-os/.git
-        cat > /usr/local/bin/agent-os <<'EOF'
+        git clone https://github.com/buildermethods/agent-os.git /home/agent/agent-os
+        git -C /home/agent/agent-os checkout cae8e664fb59a01869718c3151e0f45b7a06a2fb
+        chown -R agent:agent /home/agent/agent-os
+        for script in /home/agent/agent-os/scripts/*.sh; do
+          command_name="agent-os-$(basename "$script" .sh)"
+          printf '#!/bin/sh\nexec "%s" "$@"\n' "$script" > "/usr/local/bin/$command_name"
+          chmod 0755 "/usr/local/bin/$command_name"
+        done
+        cat > /usr/local/bin/agent-os-project-install <<'EOF'
         #!/bin/sh
-        exec /opt/agent-os/scripts/project-install.sh "$@"
+        if [ "$#" -gt 0 ] && [ -d "$1" ]; then
+          target=$1
+          shift
+          cd "$target"
+        fi
+        exec /home/agent/agent-os/scripts/project-install.sh "$@"
         EOF
-        chmod 0755 /usr/local/bin/agent-os
-        agent-os --help >/dev/null
+        chmod 0755 /usr/local/bin/agent-os-project-install
+        agent-os-project-install --help >/dev/null
+        command -v agent-os-sync-to-profile agent-os-common-functions >/dev/null
     - description: Configure automatic Git SSH commit and tag signing.
       user: "0"
       command: |
@@ -380,7 +381,12 @@ setup:
   startup:
     - description: Start VS Code server on the mounted workspace.
       user: "1000"
-      command: ["sh", "-c", "pgrep -f 'code-server.*0.0.0.0:8080' >/dev/null || nohup code-server --bind-addr 0.0.0.0:8080 --auth none '${WORKDIR}' > /tmp/code-server.log 2>&1 &"]
+      command:
+        [
+          "sh",
+          "-c",
+          "pgrep -f 'code-server.*0.0.0.0:8080' >/dev/null || nohup code-server --bind-addr 0.0.0.0:8080 --auth none '${WORKDIR}' > /tmp/code-server.log 2>&1 &",
+        ]
   files:
     - path: /home/agent/.local/bin/claude-default
       mode: "0755"
