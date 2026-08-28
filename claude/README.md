@@ -41,4 +41,4 @@ governance may still apply independently.
 
 ## Observability
 
-Start the local dashboard with `docker compose -f observability/compose.yaml up -d --build` from this repository, then open `http://localhost:8000`. Hooks fall back to `/home/agent/logs/<session-id>/events.jsonl` while it is unavailable. Create `/home/agent/.never-output-hooks` to disable capture. See [`../observability/README.md`](../observability/README.md) for the data and security model.
+Start the local dashboard with `docker compose -f observability/compose.yaml up -d --build` from this repository, then open `http://localhost:8000`. Capture is opt-in: create `/home/agent/.agent-observe-enabled` inside the sandbox to turn it on. Without that file the hooks do no network or disk I/O at all. Once enabled, events fall back to `/home/agent/logs/<session-id>/events.jsonl` while the dashboard is unavailable. See [`../observability/README.md`](../observability/README.md) for the data and security model.

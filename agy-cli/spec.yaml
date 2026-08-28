@@ -43,7 +43,7 @@ agentInstructions:
 
     ### Observability
 
-    Hooks stream model invocations, tool activity, stop reasons, and transcript deltas to `AGENT_OBSERVABILITY_URL` (default `http://host.docker.internal:8000`), buffering to `/home/agent/logs/<session-id>/events.jsonl` whenever it is unreachable. Create `/home/agent/.never-output-hooks` to stop capture.
+    Hooks stream model invocations, tool activity, stop reasons, and transcript deltas to `AGENT_OBSERVABILITY_URL` (default `http://host.docker.internal:8000`), buffering to `/home/agent/logs/<session-id>/events.jsonl` whenever it is unreachable. Capture is off unless `/home/agent/.agent-observe-enabled` exists: without that file the hooks exit before any network or disk write. Create it to turn capture on, delete it to stop.
 
     ### Project-triggered MCP servers
 
@@ -232,7 +232,7 @@ setup:
           playwright@1.61.1 \
           @playwright/test@1.61.1 \
           pyright@1.1.413 \
-          typescript@7.0.2 \
+          typescript@6.0.3 \
           typescript-language-server@6.0.0
         for bin in agy-acp ol lin shopify firecrawl playwright pyright pyright-langserver tsc tsserver typescript-language-server; do
           [ ! -e "/opt/bun/bin/$bin" ] || ln -sf "/opt/bun/bin/$bin" "/usr/local/bin/$bin"

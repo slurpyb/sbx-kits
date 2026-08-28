@@ -44,8 +44,12 @@ If the collector is down or a POST fails, the exact event is appended to:
 ```
 
 Backlogged events are retried when a later hook or agent startup can reach the
-collector. Create `/home/agent/.never-output-hooks` inside a sandbox to disable
-all hook output immediately. Remove the file to resume collection.
+collector.
+
+Collection is **opt-in**. The hooks do nothing — no HTTP, no file writes, not
+even a directory creation — unless `/home/agent/.agent-observe-enabled` exists
+inside the sandbox. Create that file to start collecting and remove it to stop;
+the default costs nothing and cannot fill the filesystem.
 
 ## Coverage
 
