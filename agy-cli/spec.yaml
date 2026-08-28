@@ -1,16 +1,13 @@
 schemaVersion: "2"
-kind: sandbox
+kind: mixin
 name: agy-cli
 displayName: Antigravity CLI workstation
-description: Google Antigravity CLI (agy) with ACP, SSH signing, AstroNvim, VS Code server, browser automation, service CLIs, and web/Python/Liquid/TypeScript tooling.
+description: Replaces Docker Sandbox's built-in Gemini CLI launcher with Google Antigravity CLI (agy) and adds ACP, SSH signing, AstroNvim, VS Code server, browser automation, service CLIs, and web/Python/Liquid/TypeScript tooling.
 
-sandbox:
-  image: docker/sandbox-templates:shell-docker
-  entrypoint:
-    - /home/agent/.local/bin/agy-default
+requires:
+  agent: gemini
 
 agentInstructions:
-  filename: AGENTS.md
   content: |
     ## Docker Sandbox workstation
 
@@ -415,6 +412,20 @@ setup:
           "pgrep -f 'code-server.*0.0.0.0:8080' >/dev/null || nohup code-server --bind-addr 0.0.0.0:8080 --auth none '${WORKDIR}' > /tmp/code-server.log 2>&1 &",
         ]
   files:
+    - path: /home/agent/.local/bin/gemini
+      mode: "0755"
+      description: Launch Antigravity in place of the built-in Gemini CLI, translating Gemini's default approval flag.
+      content: |
+        #!/usr/bin/python3
+        import os
+        import sys
+
+        launcher = "/home/agent/.local/bin/agy-default"
+        arguments = [
+            "--dangerously-skip-permissions" if argument == "--yolo" else argument
+            for argument in sys.argv[1:]
+        ]
+        os.execv(launcher, [launcher, *arguments])
     - path: /home/agent/.local/bin/agy-default
       mode: "0755"
       description: Start Antigravity CLI with Gemini 3.1 Pro High and high effort.

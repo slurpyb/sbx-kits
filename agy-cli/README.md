@@ -1,14 +1,14 @@
 # Antigravity CLI workstation kit
 
-A schema-v2 Docker Sandbox agent that installs Google's Antigravity CLI (`agy`) 1.1.22 on `docker/sandbox-templates:shell-docker`, together with the requested editor, runtimes, browser automation, service CLIs, LSPs, GitHub SSH, and SSH commit signing. It defaults to `gemini-3.1-pro-high` with high effort.
+A schema-v2 mixin for Docker Sandbox's built-in `gemini` agent. It replaces the Gemini CLI launcher with Google's Antigravity CLI (`agy`) 1.1.22 and adds the requested editor, runtimes, browser automation, service CLIs, LSPs, GitHub SSH, and SSH commit signing. It defaults to `gemini-3.1-pro-high` with high effort.
 
-This remains `kind: sandbox`: Docker Sandbox v0.39.0 has a built-in `gemini` agent, not a `google` or Antigravity agent. A mixin cannot define or replace the base agent entrypoint, and layering this kit onto `gemini` would launch Gemini CLI rather than `agy`.
+Docker Sandbox launches the built-in agent by resolving `gemini` through `PATH`; `/home/agent/.local/bin` comes first. The mixin installs a `gemini` shim there that launches `agy-default` and translates Gemini's built-in `--yolo` argument to Antigravity's equivalent `--dangerously-skip-permissions`. There is no `GEMINI_EXECUTABLE` override in Docker Sandbox v0.39.0 or the installed Gemini CLI.
 
 ## Run
 
 ```sh
 sbx settings set kit.allowedSources '["docker.io/","github.com/docker/","github.com/slurpyb/"]'
-sbx run --kit 'git+https://github.com/slurpyb/sbx-kits.git#ref=main&dir=agy-cli' agy-cli
+sbx run --kit 'git+https://github.com/slurpyb/sbx-kits.git#ref=main&dir=agy-cli' gemini
 ```
 
 For reproducibility, replace `main` with a release tag or commit SHA. Validate a
