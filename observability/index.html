@@ -1,26 +1,165 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Agent Observatory</title>
-  <style>
-    :root{color-scheme:dark;font:14px ui-monospace,SFMono-Regular,Menlo,monospace;background:#0b1020;color:#dbe7ff}*{box-sizing:border-box}body{margin:0}header{position:sticky;top:0;z-index:2;padding:14px 18px;background:#111a31;border-bottom:1px solid #263555;display:flex;gap:12px;align-items:center;flex-wrap:wrap}h1{font-size:18px;margin:0;color:#8ee3ff}input,select,button,textarea{font:inherit;color:inherit;background:#17233e;border:1px solid #34496e;border-radius:6px;padding:7px}button{cursor:pointer}button:hover{border-color:#69d2ff}.layout{display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 62px)}aside{border-right:1px solid #263555;padding:12px;overflow:auto}.session{padding:10px;border-radius:6px;margin-bottom:7px;cursor:pointer;background:#111a31}.session:hover,.session.active{background:#1b2c4e}.muted{color:#8697b7;font-size:12px}main{padding:14px;overflow:auto}.event{border:1px solid #263555;background:#10182c;border-radius:8px;padding:11px;margin-bottom:10px}.event-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.badge{padding:2px 6px;border-radius:10px;background:#243a64;color:#aeeaff}.summary{white-space:pre-wrap;margin:9px 0;max-height:180px;overflow:auto}.star{margin-left:auto;color:#7183a5}.star.on{color:#ffd45d}.note{width:100%;min-height:35px;margin-top:8px}details pre{white-space:pre-wrap;overflow-wrap:anywhere;color:#afc4e8}.empty{padding:40px;text-align:center;color:#7183a5}@media(max-width:800px){.layout{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid #263555;max-height:220px}}
-  </style>
-</head>
-<body>
-<header>
-  <h1>Agent Observatory</h1>
-  <input id="search" placeholder="Search prompts, outputs, tools…" size="34">
-  <label><input id="starred" type="checkbox"> starred only</label>
-  <button id="refresh">Refresh</button>
-  <button id="export">Export starred</button>
-  <span id="status" class="muted">connecting…</span>
-</header>
-<div class="layout">
-  <aside><div id="sessions"></div></aside>
-  <main><div id="events" class="empty">No events yet.</div></main>
-</div>
-<script type="module" src="/app.js"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Agent Observatory</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font:
+          14px ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        background: #0b1020;
+        color: #dbe7ff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        padding: 14px 18px;
+        background: #111a31;
+        border-bottom: 1px solid #263555;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0;
+        color: #8ee3ff;
+      }
+      input,
+      select,
+      button,
+      textarea {
+        font: inherit;
+        color: inherit;
+        background: #17233e;
+        border: 1px solid #34496e;
+        border-radius: 6px;
+        padding: 7px;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: #69d2ff;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        min-height: calc(100vh - 62px);
+      }
+      aside {
+        border-right: 1px solid #263555;
+        padding: 12px;
+        overflow: auto;
+      }
+      .session {
+        padding: 10px;
+        border-radius: 6px;
+        margin-bottom: 7px;
+        cursor: pointer;
+        background: #111a31;
+      }
+      .session:hover,
+      .session.active {
+        background: #1b2c4e;
+      }
+      .muted {
+        color: #8697b7;
+        font-size: 12px;
+      }
+      main {
+        padding: 14px;
+        overflow: auto;
+      }
+      .event {
+        border: 1px solid #263555;
+        background: #10182c;
+        border-radius: 8px;
+        padding: 11px;
+        margin-bottom: 10px;
+      }
+      .event-head {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .badge {
+        padding: 2px 6px;
+        border-radius: 10px;
+        background: #243a64;
+        color: #aeeaff;
+      }
+      .summary {
+        white-space: pre-wrap;
+        margin: 9px 0;
+        max-height: 180px;
+        overflow: auto;
+      }
+      .star {
+        margin-left: auto;
+        color: #7183a5;
+      }
+      .star.on {
+        color: #ffd45d;
+      }
+      .note {
+        width: 100%;
+        min-height: 35px;
+        margin-top: 8px;
+      }
+      details pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        color: #afc4e8;
+      }
+      .empty {
+        padding: 40px;
+        text-align: center;
+        color: #7183a5;
+      }
+      @media (max-width: 800px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        aside {
+          border-right: 0;
+          border-bottom: 1px solid #263555;
+          max-height: 220px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Agent Observatory</h1>
+      <input
+        id="search"
+        placeholder="Search prompts, outputs, tools…"
+        size="34"
+      />
+      <label><input id="starred" type="checkbox" /> starred only</label>
+      <button id="refresh">Refresh</button>
+      <button id="export">Export starred</button>
+      <span id="status" class="muted">connecting…</span>
+    </header>
+    <div class="layout">
+      <aside><div id="sessions"></div></aside>
+      <main><div id="events" class="empty">No events yet.</div></main>
+    </div>
+    <script type="module" src="/app.js"></script>
+  </body>
 </html>
