@@ -29,6 +29,8 @@ agentInstructions:
     ### Tooling
 
     Prefer `bun` over npm and Node. Use `uv` for Python environments, dependencies, and tools. `openspec`, `gh`, and `docker` are installed.
+
+    `octocode` researches code across GitHub, this workspace, and npm. Run `octocode context --minimal` for its tool list and protocol, then `octocode tools <name> --scheme` before composing a query: the schemas are exact and an invented field name is rejected outright. It already authenticates from `GH_TOKEN`, so leave `octocode login` alone — device-flow sign-in cannot complete against a proxy-managed sentinel.
 permissions:
   network:
     allow:
@@ -107,7 +109,7 @@ setup:
             }
         done
         bun --version >/dev/null
-        bun install -g @fission-ai/openspec
+        bun install -g @fission-ai/openspec octocode@18.3.0
         command -v openspec >/dev/null
       user: "1000"
       description: Install latest Bun with the upstream curl installer, put Bun's global bin directory on the agent user's path, and install OpenSpec globally
@@ -119,6 +121,7 @@ setup:
         EOF
         ln -sf /home/agent/.bun/bin/bun /usr/local/bin/bun
         ln -sf /home/agent/.bun/bin/openspec /usr/local/bin/openspec
+        ln -sf /home/agent/.bun/bin/octocode /usr/local/bin/octocode
         bun --version >/dev/null
         openspec --version >/dev/null || command -v openspec >/dev/null
       description: Make Bun and Bun-installed global package shims available in login shells and on the system path immediately

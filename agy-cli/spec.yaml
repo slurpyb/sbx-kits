@@ -32,8 +32,17 @@ agentInstructions:
     - `ol` Outline · `lin` Linear · `pplx` Perplexity · `firecrawl` · `jina` — each needs its token below, and some need a one-time `login`/`init` before first use.
     - `shopify` Shopify CLI; the Liquid language server is `shopify theme language-server`.
     - `cloudflared` for tunnels. `openspec`. `codemap`.
+    - `octocode` — code research across GitHub, this workspace, and npm, with LSP-backed semantic
+      queries. Reach for it when a question spans repositories that are not checked out here. Run
+      `octocode context --minimal` for its tool list and protocol, then `octocode tools <name> --scheme`
+      before composing a query: the schemas are exact and an invented field name is rejected outright.
+      It already authenticates from `GH_TOKEN`, so leave `octocode login` alone — device-flow sign-in
+      cannot complete against a proxy-managed sentinel.
     - `agent-os-project-install` — cd into a project and run it to install Builder Methods Agent OS there. Clone lives at `/home/agent/agent-os`; `agent-os-sync-to-profile` and `agent-os-common-functions` are alongside it.
-    - `playwright` with Chromium already at `/opt/ms-playwright` — go straight to scripting; `playwright install` is redundant.
+    - `playwright` is not installed by default, because the CLI plus a Chromium build costs minutes of
+      create time that most tasks never use. When a task genuinely needs a browser, add both:
+      `sudo bun install -g --trust playwright@1.61.1 && playwright install --with-deps chromium`.
+      The browser lands in `~/.cache/ms-playwright`.
     - `nvim` with AstroNvim.
     - Node 24, `bun`/`bunx`, `typescript-language-server`, `pyright-langserver`.
 
@@ -142,7 +151,6 @@ environment:
     BUN_INSTALL: /opt/bun
     AGY_BIN: /home/agent/.local/bin/agy-default
     AGENT_OBSERVABILITY_URL: http://host.docker.internal:8000
-    PLAYWRIGHT_BROWSERS_PATH: /opt/ms-playwright
     NODE_PATH: /usr/local/lib/node_modules
 
 ports:
@@ -229,12 +237,11 @@ setup:
           @linear/cli@0.0.5 \
           @shopify/cli@4.7.0 \
           firecrawl-cli@1.23.3 \
-          playwright@1.61.1 \
-          @playwright/test@1.61.1 \
+          octocode@18.3.0 \
           pyright@1.1.413 \
           typescript@6.0.3 \
           typescript-language-server@6.0.0
-        for bin in agy-acp ol lin shopify firecrawl playwright pyright pyright-langserver tsc tsserver typescript-language-server; do
+        for bin in agy-acp ol lin shopify firecrawl octocode pyright pyright-langserver tsc tsserver typescript-language-server; do
           [ ! -e "/opt/bun/bin/$bin" ] || ln -sf "/opt/bun/bin/$bin" "/usr/local/bin/$bin"
         done
         ln -sf /opt/bun/bin/ol /usr/local/bin/outline
