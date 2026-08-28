@@ -34,3 +34,7 @@ automatically on container port 8080.
 
 The kit contains no network deny rule. Docker Sandbox local or organization
 governance may still apply independently.
+
+## Observability
+
+Start the local dashboard with `docker compose -f observability/compose.yaml up -d --build` from this repository, then open `http://localhost:8000`. Hooks fall back to `/home/agent/logs/<session-id>/events.jsonl` while it is unavailable. Create `/home/agent/.never-output-hooks` to disable capture. See [`../observability/README.md`](../observability/README.md) for the data and security model.

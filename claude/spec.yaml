@@ -26,6 +26,8 @@ agentInstructions:
 
     `agent-os` installs Builder Methods Agent OS into the current project. `ol`, `lin`, `shopify`, `firecrawl`, `jina`, and `pplx` may require their corresponding credential and/or one-time configuration before first use.
 
+    Native harness hooks send prompts, assistant messages, tool activity, and transcript deltas to `AGENT_OBSERVABILITY_URL` (default `http://host.docker.internal:8000`). If its `/healthcheck` is unavailable, events are written to `/home/agent/logs/<session-id>/events.jsonl` and retried later. Create `/home/agent/.never-output-hooks` to disable all output immediately. The host dashboard is in this repository's `observability/` directory.
+
     On entering an Astro project, immediately add the Astro docs MCP server: `claude mcp add --transport http astro-docs https://mcp.docs.astro.build/mcp`. On entering a Shopify project, immediately add Shopify Dev MCP: `claude mcp add --transport stdio shopify-dev -- npx -y @shopify/dev-mcp@1.14.6`. On entering a Panda CSS project, immediately add Panda MCP: `claude mcp add --transport stdio panda -- npx -y @pandacss/mcp@1.12.0`. Do this before substantive project work, but do not duplicate an existing server registration.
 
 permissions:
@@ -71,6 +73,7 @@ permissions:
       - api.cloudflare.com
       - useagentos.com
       - api.useagentos.com
+      - host.docker.internal:8000
 
 credentials:
   - service: anthropic
@@ -143,6 +146,7 @@ environment:
     VISUAL: nvim
     FNM_DIR: /opt/fnm
     BUN_INSTALL: /opt/bun
+    AGENT_OBSERVABILITY_URL: http://host.docker.internal:8000
     PLAYWRIGHT_BROWSERS_PATH: /opt/ms-playwright
     NODE_PATH: /usr/local/lib/node_modules
 
@@ -385,6 +389,8 @@ setup:
         #!/bin/bash
         export ANTHROPIC_DEFAULT_MODEL=claude-opus-5
         export CLAUDE_CODE_EFFORT_LEVEL=xhigh
+        /home/agent/.local/bin/install-observability-hooks claude || true
+        /home/agent/.local/bin/agent-observe-hook --flush >/dev/null 2>&1 || true
         exec /home/agent/.local/bin/claude --model claude-opus-5 --effort xhigh "$@"
     - path: /home/agent/.local/bin/claude-acp
       mode: "0755"

@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Fail-open event relay shared by Codex, Claude Code, and Antigravity hooks."""
+
+from __future__ import annotations
+
+import fcntl
+import http.client
+import json
+import os
+import re
+import ssl
+import sys
+import time
+from pathlib import Path
+from urllib.parse import urlsplit
+from typing import Any
+
+HOME = Path(os.environ.get("HOME", "/home/agent"))
+DISABLE_FILE = HOME / ".never-output-hooks"
+LOG_ROOT = HOME / "logs"
+STATE_ROOT = HOME / ".cache" / "agent-observability"
+ENDPOINT = os.environ.get("AGENT_OBSERVABILITY_URL", "http://host.docker.internal:8000").rstrip("/")
+ENDPOINT_PARTS = urlsplit(ENDPOINT)
+
+
+def hook_response(harness: str, event_name: str) -> dict[str, Any]:
+    if harness == "agy" and event_name == "Stop":
+        return {"decision": "stop"}
+    return {}
+
+
+def safe_session(value: object) -> str:
+    text = str(value or "unknown")
+    return re.sub(r"[^A-Za-z0-9._-]", "_", text)[:160] or "unknown"
+
+
+def load_payload(raw: bytes) -> dict[str, Any]:
+    try:
+        value = json.loads(raw.decode("utf-8"))
+        return value if isinstance(value, dict) else {"value": value}
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return {"unparsed_stdin": raw.decode("utf-8", errors="replace")}
+
+
+def transcript_delta(harness: str, session_id: str, payload: dict[str, Any]) -> str:
+    raw_path = payload.get("transcript_path") or payload.get("transcriptPath")
+    if not isinstance(raw_path, str) or not raw_path:
+        return ""
+    path = Path(os.path.expanduser(raw_path)).resolve()
+    allowed_roots = {
+        "codex": (HOME / ".codex").resolve(),
+        "claude": (HOME / ".claude").resolve(),
+        "agy": (HOME / ".gemini").resolve(),
+    }
+    allowed_root = allowed_roots.get(harness)
+    if allowed_root is None or not path.is_relative_to(allowed_root) or not path.is_file():
+        return ""
+    state_dir = STATE_ROOT / harness
+    state_dir.mkdir(parents=True, exist_ok=True)
+    state_path = state_dir / f"{safe_session(session_id)}.json"
+    lock_path = state_dir / f"{safe_session(session_id)}.lock"
+    with lock_path.open("a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        state: dict[str, Any] = {}
+        try:
+            state = json.loads(state_path.read_text()) if state_path.exists() else {}
+        except (OSError, json.JSONDecodeError):
+            state = {}
+        size = path.stat().st_size
+        try:
+            offset = int(state.get(str(path), 0))
+        except (TypeError, ValueError):
+            offset = 0
+        if offset < 0 or offset > size:
+            offset = 0
+        with path.open("rb") as transcript:
+            transcript.seek(offset)
+            delta = transcript.read()
+        state[str(path)] = size
+        state_path.write_text(json.dumps(state))
+        return delta.decode("utf-8", errors="replace")
+
+
+def request(method: str, path: str, data: bytes | None, timeout: float) -> tuple[int, bytes] | None:
+    if ENDPOINT_PARTS.scheme not in {"http", "https"} or not ENDPOINT_PARTS.hostname:
+        return None
+    target = f"{ENDPOINT_PARTS.path.rstrip('/')}{path}" or "/"
+    connection_type = http.client.HTTPSConnection if ENDPOINT_PARTS.scheme == "https" else http.client.HTTPConnection
+    kwargs: dict[str, Any] = {"host": ENDPOINT_PARTS.hostname, "port": ENDPOINT_PARTS.port, "timeout": timeout}
+    if connection_type is http.client.HTTPSConnection:
+        kwargs["context"] = ssl.create_default_context()
+    connection = connection_type(**kwargs)
+    try:
+        headers = {"Content-Type": "application/json"} if data is not None else {}
+        connection.request(method, target, body=data, headers=headers)
+        response = connection.getresponse()
+        return response.status, response.read()
+    except (OSError, http.client.HTTPException):
+        return None
+    finally:
+        connection.close()
+
+
+def healthy() -> bool:
+    result = request("GET", "/healthcheck", None, 0.6)
+    if result is None or result[0] != 200:
+        return False
+    try:
+        return json.loads(result[1].decode("utf-8")).get("status") == "ok"
+    except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+        return False
+
+
+def post_record(record: dict[str, Any]) -> bool:
+    data = json.dumps(record, separators=(",", ":")).encode("utf-8")
+    result = request("POST", "/events", data, 1.5)
+    return result is not None and 200 <= result[0] < 300
+
+
+def fallback_path(session_id: str) -> Path:
+    directory = LOG_ROOT / safe_session(session_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory / "events.jsonl"
+
+
+def append_fallback(session_id: str, record: dict[str, Any]) -> None:
+    path = fallback_path(session_id)
+    lock_path = path.with_suffix(".lock")
+    lock_path.touch(exist_ok=True)
+    with lock_path.open("r+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        with path.open("a", encoding="utf-8") as output:
+            output.write(json.dumps(record, separators=(",", ":")) + "\n")
+
+
+def flush_backlog() -> None:
+    if not LOG_ROOT.is_dir():
+        return
+    for path in LOG_ROOT.glob("*/events.jsonl"):
+        lock_path = path.with_suffix(".lock")
+        lock_path.touch(exist_ok=True)
+        with lock_path.open("r+") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                lines = path.read_text(encoding="utf-8").splitlines()
+            except OSError:
+                continue
+            remaining: list[str] = []
+            for index, line in enumerate(lines):
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    remaining.append(line)
+                    continue
+                if not post_record(record):
+                    remaining.extend(lines[index:])
+                    break
+            replacement = "\n".join(remaining)
+            path.write_text(f"{replacement}\n" if replacement else "", encoding="utf-8")
+
+
+def main() -> int:
+    if len(sys.argv) >= 2 and sys.argv[1] == "--flush":
+        if not DISABLE_FILE.exists() and healthy():
+            flush_backlog()
+        return 0
+
+    harness = sys.argv[1] if len(sys.argv) > 1 else "unknown"
+    event_name = sys.argv[2] if len(sys.argv) > 2 else "event"
+    raw = sys.stdin.buffer.read()
+    response = hook_response(harness, event_name)
+    if DISABLE_FILE.exists():
+        print(json.dumps(response))
+        return 0
+
+    payload = load_payload(raw)
+    session_id = payload.get("session_id") or payload.get("sessionId") or payload.get("conversationId") or "unknown"
+    record: dict[str, Any] = {
+        "schema_version": 1,
+        "emitted_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "harness": harness,
+        "event_name": event_name,
+        "session_id": str(session_id),
+        "payload": payload,
+    }
+    delta = transcript_delta(harness, str(session_id), payload)
+    if delta:
+        record["transcript_delta"] = delta
+
+    if healthy():
+        flush_backlog()
+        delivered = post_record(record)
+    else:
+        delivered = False
+    if not delivered:
+        append_fallback(str(session_id), record)
+    print(json.dumps(response))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

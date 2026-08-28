@@ -1,3 +1,10 @@
 .env
+.DS_Store
+envs/
+envs-rewards/
 _reference/
 .agents/
+observability/node_modules/
+observability/data/
+__pycache__/
+*.pyc

@@ -1,0 +1,13 @@
+{
+  "name": "sbx-agent-observatory",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run server.ts",
+    "check": "bunx tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.9",
+    "typescript": "7.0.2"
+  }
+}
