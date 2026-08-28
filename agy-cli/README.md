@@ -1,0 +1,36 @@
+# Antigravity CLI workstation kit
+
+A schema-v2 Docker Sandbox kit that installs Google's Antigravity CLI (`agy`)
+1.1.22 on `docker/sandbox-templates:shell-docker`, together with the requested
+editor, runtimes, browser automation, service CLIs, LSPs, GitHub SSH, and SSH
+commit signing. It defaults to `gemini-3.1-pro-high` with high effort.
+
+## Run
+
+```sh
+sbx settings set kit.allowedSources '["docker.io/","github.com/docker/","github.com/slurpyb/"]'
+sbx run --kit 'git+https://github.com/slurpyb/sbx-kits.git#ref=main&dir=agy-cli' agy-cli
+```
+
+For reproducibility, replace `main` with a release tag or commit SHA. Validate a
+checkout with `sbx kit validate ./agy-cli`.
+
+## Authentication and ACP
+
+Configure the `google` secret so `GEMINI_API_KEY` can be proxy-managed. The kit
+sets Antigravity's required `modelProvider` to `gemini`; setting the environment
+variable alone is not sufficient in agy. The other declared services are `github`, `outline`, `linear`, `shopify`,
+`cloudflare`, `firecrawl`, `jina`, `agentos`, and `perplexity`.
+
+Agy does not currently document native ACP support. This kit installs the
+unofficial, version-pinned `agy-acp` 0.5.2 adapter and points it at the configured
+agy launcher. The bridge depends on agy's PTY and local conversation database,
+so revalidate it when upgrading agy and replace it when Google ships native ACP.
+
+GitHub SSH authentication and commit signing use the host's forwarded SSH agent.
+Use `sbx ports <sandbox>` to discover code-server's mapped port. Microsoft's VS
+Code tunnel is started manually with `vscode-server`; browser code-server starts
+automatically on container port 8080.
+
+The kit contains no network deny rule. Docker Sandbox local or organization
+governance may still apply independently.

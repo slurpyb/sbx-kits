@@ -1,0 +1,435 @@
+schemaVersion: "2"
+kind: sandbox
+name: agy-cli
+displayName: Antigravity CLI workstation
+description: Google Antigravity CLI (agy) with ACP, SSH signing, AstroNvim, VS Code server, browser automation, service CLIs, and web/Python/Liquid/TypeScript tooling.
+
+sandbox:
+  image: docker/sandbox-templates:shell-docker
+  entrypoint:
+    - /home/agent/.local/bin/agy-default
+
+agentInstructions:
+  filename: AGENTS.md
+  content: |
+    ## Docker Sandbox workstation
+
+    You are running inside a Docker Sandbox, not directly on the host. The workspace is mounted into the sandbox. `sudo` is passwordless. Credentials are supplied by Docker Sandbox; proxy-managed values are sentinels and must never be printed, copied, persisted, or used for interactive login. The kit adds no network deny rules. Organization or local Docker Sandbox governance can still restrict egress; inspect a 403 response and `sbx policy log` on the host when a destination is blocked.
+
+    The default model is `gemini-3.1-pro-high` with effort `high`. ACP is available through `agy-acp` version 0.5.2. That adapter is an unofficial PTY/database bridge because agy does not yet expose native ACP; treat it as version-sensitive and prefer native ACP if Google ships it.
+
+    Installed commands available to interactive and non-interactive processes through `/usr/local/bin` include: `bun`, `bunx`, `fnm`, Node.js 24 (`node`, `npm`, `npx`, `corepack`), `nvim` with AstroNvim, Microsoft `code`/`vscode-server` and browser-based `code-server`, `playwright`, `ol` (Outline), `lin` (Linear), `shopify`, `cloudflared`, `firecrawl`, `jina`/`jina-cli`, `codemap`, `openspec`, Builder Methods `agent-os`, AgentOS `agentos`, `pplx`/`perplexity-cli`, `typescript-language-server`, `pyright-langserver`, and the Shopify Liquid language server through `shopify theme language-server`. Chromium is installed at `/opt/ms-playwright`; `PLAYWRIGHT_BROWSERS_PATH` is already set.
+
+    GitHub SSH host keys are preloaded. The host SSH agent is forwarded for GitHub authentication and automatic SSH commit/tag signing. If signing fails, verify `SSH_AUTH_SOCK` and `ssh-add -L` before changing Git config.
+
+    Service credentials use these environment variables when configured on the host: `GEMINI_API_KEY`, `GH_TOKEN`, `OUTLINE_API_TOKEN`, `LINEAR_API_KEY`, `SHOPIFY_CLI_THEME_TOKEN`, `TUNNEL_TOKEN`, `FIRECRAWL_API_KEY`, `JINA_API_KEY`, `AGENTOS_TOKEN`, and `PERPLEXITY_API_KEY`.
+
+    `agent-os` installs Builder Methods Agent OS into the current project. `ol`, `lin`, `shopify`, `firecrawl`, `jina`, and `pplx` may require their corresponding credential and/or one-time configuration before first use.
+
+    On entering an Astro project, immediately run `agy mcp add astro-docs https://mcp.docs.astro.build/mcp`. On entering a Shopify project, immediately run `agy mcp add shopify-dev npx -y @shopify/dev-mcp@1.14.6`. On entering a Panda CSS project, immediately run `agy mcp add panda npx -y @pandacss/mcp@1.12.0`. Do this before substantive project work, but check `agy mcp list` first and do not duplicate an existing server registration.
+
+permissions:
+  network:
+    allow:
+      - generativelanguage.googleapis.com
+      - accounts.google.com
+      - oauth2.googleapis.com
+      - antigravity.google
+      - antigravity-cli-auto-updater-974169037036.us-central1.run.app
+      - api.github.com
+      - github.com
+      - github.com:22
+      - raw.githubusercontent.com
+      - objects.githubusercontent.com
+      - codeload.github.com
+      - release-assets.githubusercontent.com
+      - registry.npmjs.org
+      - pypi.org
+      - files.pythonhosted.org
+      - nodejs.org
+      - update.code.visualstudio.com
+      - archive.ubuntu.com
+      - security.ubuntu.com
+      - ports.ubuntu.com
+      - download.docker.com
+      - cdn.playwright.dev
+      - playwright.download.prss.microsoft.com
+      - storage.googleapis.com
+      - api.linear.app
+      - api.firecrawl.dev
+      - api.jina.ai
+      - r.jina.ai
+      - api.perplexity.ai
+      - code-server.dev
+      - open-vsx.org
+      - openvsx.eclipsecontent.org
+      - mcp.docs.astro.build
+      - shopify.dev
+      - partners.shopify.com
+      - accounts.shopify.com
+      - admin.shopify.com
+      - myshopify.com
+      - "*.myshopify.com"
+      - cloudflare.com
+      - api.cloudflare.com
+      - useagentos.com
+      - api.useagentos.com
+
+credentials:
+  - service: google
+    description: Gemini API token used by Antigravity CLI in headless and CI environments.
+    apiKey:
+      name: GEMINI_API_KEY
+      proxyManaged: true
+      inject:
+        - domain: generativelanguage.googleapis.com
+          header: x-goog-api-key
+          format: "%s"
+  - service: github
+    description: GitHub token used by gh and HTTPS GitHub API operations; SSH uses the forwarded host agent.
+    apiKey:
+      name: GH_TOKEN
+      proxyManaged: true
+      inject:
+        - domain: api.github.com
+          header: Authorization
+          scheme: bearer
+        - domain: github.com
+          header: Authorization
+          scheme: bearer
+  - service: outline
+    description: Outline knowledge-base API token. Kept as a real environment value because the Outline host is user-configurable.
+    apiKey:
+      name: OUTLINE_API_TOKEN
+  - service: linear
+    description: Linear API token for lin.
+    apiKey:
+      name: LINEAR_API_KEY
+  - service: shopify
+    description: Shopify CLI token for non-interactive partner operations.
+    apiKey:
+      name: SHOPIFY_CLI_THEME_TOKEN
+  - service: cloudflare
+    description: Cloudflare Tunnel token for non-interactive cloudflared runs.
+    apiKey:
+      name: TUNNEL_TOKEN
+  - service: firecrawl
+    description: Firecrawl API token.
+    apiKey:
+      name: FIRECRAWL_API_KEY
+      proxyManaged: true
+      inject:
+        - domain: api.firecrawl.dev
+          header: Authorization
+          scheme: bearer
+  - service: jina
+    description: Jina AI API token.
+    apiKey:
+      name: JINA_API_KEY
+  - service: agentos
+    description: AgentOS authentication token.
+    apiKey:
+      name: AGENTOS_TOKEN
+  - service: perplexity
+    description: Perplexity API token for pplx.
+    apiKey:
+      name: PERPLEXITY_API_KEY
+      proxyManaged: true
+      inject:
+        - domain: api.perplexity.ai
+          header: Authorization
+          scheme: bearer
+
+environment:
+  variables:
+    EDITOR: nvim
+    VISUAL: nvim
+    FNM_DIR: /opt/fnm
+    BUN_INSTALL: /opt/bun
+    AGY_BIN: /home/agent/.local/bin/agy-default
+    PLAYWRIGHT_BROWSERS_PATH: /opt/ms-playwright
+    NODE_PATH: /usr/local/lib/node_modules
+
+ports:
+  - container: 8080
+    protocol: tcp
+    name: vscode-server
+
+setup:
+  install:
+    - description: Install base OS dependencies, SSH server, and GitHub SSH trust.
+      user: "0"
+      command: |
+        set -eu
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential ca-certificates curl git jq openssh-server python3 python3-venv python3-pip ripgrep unzip xz-utils
+        ssh-keygen -A
+        install -d -m 0700 -o agent -g agent /home/agent/.ssh
+        curl -fsSL https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' > /home/agent/.ssh/known_hosts
+        chmod 0644 /home/agent/.ssh/known_hosts
+        chown agent:agent /home/agent/.ssh/known_hosts
+        rm -rf /var/lib/apt/lists/*
+    - description: Install pinned fnm and Node.js 24 system-wide.
+      user: "0"
+      command: |
+        set -eu
+        arch=$(dpkg --print-architecture)
+        case "$arch" in
+          amd64) asset=fnm-linux.zip; sha=7807664f39d39fc518da1c35ba0181e4b3267603c4b1dedeb4b5fc6ae440a224 ;;
+          arm64) asset=fnm-arm64.zip; sha=4eaff58b2c5bf30d0934027572dd0b5bbb60d2a1af309230b53662d4b1d45599 ;;
+          *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
+        esac
+        curl -fsSL "https://github.com/Schniz/fnm/releases/download/v1.39.0/$asset" -o /tmp/fnm.zip
+        echo "$sha  /tmp/fnm.zip" | sha256sum -c -
+        unzip -q /tmp/fnm.zip -d /tmp/fnm
+        install -m 0755 /tmp/fnm/fnm /usr/local/bin/fnm
+        install -d -m 0755 /opt/fnm
+        FNM_DIR=/opt/fnm fnm install 24
+        FNM_DIR=/opt/fnm fnm default 24
+        node_bin=$(FNM_DIR=/opt/fnm fnm exec --using=24 node -p 'require("path").dirname(process.execPath)')
+        for bin in node npm npx corepack; do ln -sf "$node_bin/$bin" "/usr/local/bin/$bin"; done
+        cat > /etc/profile.d/fnm.sh <<'EOF'
+        export FNM_DIR=/opt/fnm
+        export PATH="/usr/local/bin:$PATH"
+        EOF
+        node --version | grep -E '^v24\.'
+    - description: Install pinned Bun system-wide.
+      user: "0"
+      command: |
+        set -eu
+        arch=$(dpkg --print-architecture)
+        case "$arch" in
+          amd64) asset=bun-linux-x64.zip; dir=bun-linux-x64; sha=2d03fb5fb83ac8b567aca0a281b2ce1a1a19d488f56c2968d88c3f25e92fe452 ;;
+          arm64) asset=bun-linux-aarch64.zip; dir=bun-linux-aarch64; sha=4b1a332ee861983eb93bcfe6f770fff94e3e31b2c388bdaea3c8ed35e58eed0e ;;
+          *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
+        esac
+        curl -fsSL "https://github.com/oven-sh/bun/releases/download/bun-v1.4.0/$asset" -o /tmp/bun.zip
+        echo "$sha  /tmp/bun.zip" | sha256sum -c -
+        unzip -q /tmp/bun.zip -d /tmp/bun
+        install -d -m 0755 /opt/bun/bin
+        install -m 0755 "/tmp/bun/$dir/bun" /opt/bun/bin/bun
+        ln -sf /opt/bun/bin/bun /usr/local/bin/bun
+        ln -sf /opt/bun/bin/bun /usr/local/bin/bunx
+        BUN_INSTALL=/opt/bun bun install -g @fission-ai/openspec@1.11.0
+        ln -sf /opt/bun/bin/openspec /usr/local/bin/openspec
+        bun --version
+        openspec --version >/dev/null
+    - description: Install requested JavaScript CLIs, language servers, OpenSpec, and Playwright.
+      user: "0"
+      command: |
+        set -eu
+        npm config set prefix /usr/local
+        if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy "$HTTP_PROXY"; npm config set https-proxy "${HTTPS_PROXY:-$HTTP_PROXY}"; fi
+        npm install -g --allow-scripts=@doist/outline-cli,esbuild,node-pty \
+          @doist/outline-cli@2.0.1 \
+          agy-acp@0.5.2 \
+          @linear/cli@0.0.5 \
+          @shopify/cli@4.7.0 \
+          firecrawl-cli@1.23.3 \
+          playwright@1.61.1 \
+          @playwright/test@1.61.1 \
+          pyright@1.1.413 \
+          typescript@7.0.2 \
+          typescript-language-server@6.0.0
+        npm_bin=$(npm prefix -g)/bin
+        for bin in agy-acp ol lin shopify firecrawl playwright pyright pyright-langserver tsc tsserver typescript-language-server; do
+          [ ! -e "$npm_bin/$bin" ] || ln -sf "$npm_bin/$bin" "/usr/local/bin/$bin"
+        done
+        export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+        playwright install --with-deps chromium
+        chmod -R 0777 /opt/ms-playwright
+        ln -sf "$(command -v ol)" /usr/local/bin/outline
+        ln -sf "$(command -v lin)" /usr/local/bin/linear
+        cat > /usr/local/bin/liquid-language-server <<'EOF'
+        #!/bin/sh
+        exec shopify theme language-server "$@"
+        EOF
+        chmod 0755 /usr/local/bin/liquid-language-server
+        for bin in ol outline openspec lin linear shopify liquid-language-server firecrawl playwright pyright-langserver typescript-language-server; do command -v "$bin" >/dev/null; done
+    - description: Install pinned Jina CLI, CodeMap, and AgentOS in isolated Python environments.
+      user: "0"
+      command: |
+        set -eu
+        python3 -m venv /opt/jina-cli
+        /opt/jina-cli/bin/pip install --no-cache-dir jina-cli==0.3.0
+        ln -sf /opt/jina-cli/bin/jina /usr/local/bin/jina
+        ln -sf /opt/jina-cli/bin/jina /usr/local/bin/jina-cli
+        python3 -m venv /opt/codemap
+        /opt/codemap/bin/pip install --no-cache-dir codemap==0.3.0
+        ln -sf /opt/codemap/bin/codemap /usr/local/bin/codemap
+        [ ! -x /opt/codemap/bin/cm ] || ln -sf /opt/codemap/bin/cm /usr/local/bin/cm
+        python3 -m venv /opt/agentos
+        /opt/agentos/bin/pip install --no-cache-dir use-agent-os==2026.8.28
+        ln -sf /opt/agentos/bin/agentos /usr/local/bin/agentos
+        jina --help >/dev/null
+        codemap --help >/dev/null
+        agentos --help >/dev/null
+    - description: Install pinned cloudflared and Perplexity CLI binaries.
+      user: "0"
+      command: |
+        set -eu
+        arch=$(dpkg --print-architecture)
+        case "$arch" in
+          amd64)
+            cloud_asset=cloudflared-linux-amd64
+            cloud_sha=fcfb02b575a52ca1af2e3267af4e1517bcdeb30ac48c834c69abaed3c0576ad2
+            pplx_asset=pplx-x86_64-linux-gnu.bin
+            pplx_sha=5002275d947f9d06ed2e7cdc7a815fd1eadc1ba1eb981995c789e13721b8fffe
+            ;;
+          arm64)
+            cloud_asset=cloudflared-linux-arm64
+            cloud_sha=7747d94570fb390cf47dcb4f9555c193c6355cda9793f0d878d9049e5d6a7790
+            pplx_asset=pplx-aarch64-linux-gnu.bin
+            pplx_sha=31e0355a31eec6e637938372f6463c92f5a5147c4231c208a567bb728d75cde3
+            ;;
+          *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
+        esac
+        curl -fsSL "https://github.com/cloudflare/cloudflared/releases/download/2026.8.2/$cloud_asset" -o /tmp/cloudflared
+        echo "$cloud_sha  /tmp/cloudflared" | sha256sum -c -
+        install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
+        curl -fsSL "https://github.com/perplexityai/perplexity-cli/releases/download/v0.2.3/$pplx_asset" -o /tmp/pplx
+        echo "$pplx_sha  /tmp/pplx" | sha256sum -c -
+        install -m 0755 /tmp/pplx /usr/local/bin/pplx
+        ln -sf /usr/local/bin/pplx /usr/local/bin/perplexity-cli
+        cloudflared --version
+        pplx --help >/dev/null
+    - description: Install pinned Neovim and AstroNvim for the agent user.
+      user: "0"
+      command: |
+        set -eu
+        arch=$(dpkg --print-architecture)
+        case "$arch" in
+          amd64) asset=nvim-linux-x86_64.tar.gz; dir=nvim-linux-x86_64; sha=bce0f56eda1f1b1db6eee8f4133d7a38813ea07933837dd1777411ca384c6875 ;;
+          arm64) asset=nvim-linux-arm64.tar.gz; dir=nvim-linux-arm64; sha=1aa5ca085249580ae0f91eb14f27ec0919773ff2d99a163d03f3d6c21ac29725 ;;
+          *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
+        esac
+        curl -fsSL "https://github.com/neovim/neovim/releases/download/v0.12.5/$asset" -o /tmp/nvim.tar.gz
+        echo "$sha  /tmp/nvim.tar.gz" | sha256sum -c -
+        tar -C /opt -xzf /tmp/nvim.tar.gz
+        ln -sf "/opt/$dir/bin/nvim" /usr/local/bin/nvim
+        rm -rf /home/agent/.config/nvim
+        git clone https://github.com/AstroNvim/template.git /home/agent/.config/nvim
+        git -C /home/agent/.config/nvim checkout 49a7161b776f8bc6c23508819ea1ad4e7b359bee
+        rm -rf /home/agent/.config/nvim/.git
+        chown -R agent:agent /home/agent/.config
+        nvim --version | head -1
+    - description: Pre-install AstroNvim plugins as the agent user.
+      user: "1000"
+      command: |
+        set -eu
+        HOME=/home/agent nvim --headless '+Lazy! sync' +qa
+    - description: Install pinned Microsoft VS Code CLI/server and browser-based code-server.
+      user: "0"
+      command: |
+        set -eu
+        arch=$(dpkg --print-architecture)
+        case "$arch" in
+          amd64)
+            code_target=cli-linux-x64
+            code_sha=fb1ad570680a4b9c6054edd3b12881939b6991001204d96462071f55259dec00
+            asset=code-server-4.135.0-linux-amd64.tar.gz
+            dir=code-server-4.135.0-linux-amd64
+            server_sha=300ef4e37e469e6368a4673c6a623e1c9ba8a34f42b394fb49c431a8900bc7d1
+            ;;
+          arm64)
+            code_target=cli-linux-arm64
+            code_sha=f1596118d027f71051ebb7b35385b98a3a892f183c70ca5cc4ca4eb848e53407
+            asset=code-server-4.135.0-linux-arm64.tar.gz
+            dir=code-server-4.135.0-linux-arm64
+            server_sha=fe6561798415e709109cb902dca2a57a687240af7d8220f6fa1d01cd2ae0541e
+            ;;
+          *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
+        esac
+        curl -fsSL "https://update.code.visualstudio.com/1.135.0/$code_target/stable" -o /tmp/vscode-cli.tar.gz
+        echo "$code_sha  /tmp/vscode-cli.tar.gz" | sha256sum -c -
+        tar -C /usr/local/bin -xzf /tmp/vscode-cli.tar.gz code
+        cat > /usr/local/bin/vscode-server <<'EOF'
+        #!/bin/sh
+        exec code tunnel "$@"
+        EOF
+        chmod 0755 /usr/local/bin/vscode-server
+        curl -fsSL "https://github.com/coder/code-server/releases/download/v4.135.0/$asset" -o /tmp/code-server.tar.gz
+        echo "$server_sha  /tmp/code-server.tar.gz" | sha256sum -c -
+        tar -C /opt -xzf /tmp/code-server.tar.gz
+        ln -sf "/opt/$dir/bin/code-server" /usr/local/bin/code-server
+        code --version
+        code-server --version
+    - description: Install Builder Methods Agent OS and a global project installer command.
+      user: "0"
+      command: |
+        set -eu
+        git clone https://github.com/buildermethods/agent-os.git /opt/agent-os
+        git -C /opt/agent-os checkout cae8e664fb59a01869718c3151e0f45b7a06a2fb
+        rm -rf /opt/agent-os/.git
+        cat > /usr/local/bin/agent-os <<'EOF'
+        #!/bin/sh
+        exec /opt/agent-os/scripts/project-install.sh "$@"
+        EOF
+        chmod 0755 /usr/local/bin/agent-os
+        agent-os --help >/dev/null
+    - description: Install pinned Google Antigravity CLI for amd64 and arm64.
+      user: "0"
+      command: |
+        set -eu
+        arch=$(dpkg --print-architecture)
+        case "$arch" in
+          amd64)
+            url=https://storage.googleapis.com/antigravity-public/antigravity-cli/1.1.22-5711547746615296/linux-x64/cli_linux_x64.tar.gz
+            sha=40225d4b1f009412e905f0a234ba3d51487038d1ad1b8fa19331c84be55610a01f5b0ad9916fb871151cc45456c6bc30cc0b1ea5dab6c0616bc8fb262bcdd7a9
+            ;;
+          arm64)
+            url=https://storage.googleapis.com/antigravity-public/antigravity-cli/1.1.22-5711547746615296/linux-arm/cli_linux_arm64.tar.gz
+            sha=b37a718330eb5e270e1ca70135bf964a407ba626fbff7537ac58e094ea31bc623e6d216ef197188fe8b5c46e6f57aee64a3b7c9e23fc855cefee43fe434179d3
+            ;;
+          *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
+        esac
+        curl -fsSL "$url" -o /tmp/agy.tar.gz
+        echo "$sha  /tmp/agy.tar.gz" | sha512sum -c -
+        tar -C /tmp -xzf /tmp/agy.tar.gz antigravity
+        install -m 0755 /tmp/antigravity /usr/local/bin/agy
+        agy --version
+        command -v agy-acp >/dev/null
+    - description: Configure automatic Git SSH commit and tag signing.
+      user: "0"
+      command: |
+        set -eu
+        git config --system gpg.format ssh
+        git config --system --unset-all user.signingKey || true
+        git config --system commit.gpgSign true
+        git config --system tag.gpgSign true
+        git config --system gpg.ssh.defaultKeyCommand /home/agent/.config/git/ssh-signing-key-command
+        git config --system gpg.ssh.allowedSignersFile /home/agent/.config/git/allowed_signers
+        install -d -m 0755 -o agent -g agent /home/agent/.config/git
+  startup:
+    - description: Start VS Code server on the mounted workspace.
+      user: "1000"
+      command: ["sh", "-c", "pgrep -f 'code-server.*0.0.0.0:8080' >/dev/null || nohup code-server --bind-addr 0.0.0.0:8080 --auth none '${WORKDIR}' > /tmp/code-server.log 2>&1 &"]
+  files:
+    - path: /home/agent/.local/bin/agy-default
+      mode: "0755"
+      description: Start Antigravity CLI with Gemini 3.1 Pro High and high effort.
+      content: |
+        #!/bin/bash
+        exec /usr/local/bin/agy --model gemini-3.1-pro-high --effort high "$@"
+    - path: /home/agent/.gemini/antigravity-cli/settings.json
+      mode: "0644"
+      description: Select direct Gemini API-key authentication when the Google service credential is configured.
+      content: |
+        {
+          "modelProvider": "gemini"
+        }
+    - path: /home/agent/.config/git/ssh-signing-key-command
+      mode: "0755"
+      description: Select the first forwarded SSH key for Git signing.
+      content: |
+        #!/bin/sh
+        set -e
+        if [ -z "$SSH_AUTH_SOCK" ]; then
+          SSH_AUTH_SOCK=$(tr '\0' '\n' < /proc/1/environ | grep -m1 '^SSH_AUTH_SOCK=' | cut -d= -f2- || true)
+          export SSH_AUTH_SOCK
+        fi
+        key=$(ssh-add -L 2>/dev/null | head -n 1)
+        [ -n "$key" ] || { echo "[git-ssh-sign] no key in forwarded SSH agent" >&2; exit 1; }
+        email=$(git config user.email 2>/dev/null || printf '%s' agent@sandbox.local)
+        printf '%s %s\n' "$email" "$key" > /home/agent/.config/git/allowed_signers
+        printf 'key::%s\n' "$key"

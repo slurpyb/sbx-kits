@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repos_root="${CLAUDE_SBX_REPOS_ROOT:-${HOME:?HOME must be set}/repos}"
+worktrees_root="${CLAUDE_SBX_WORKTREES_ROOT:-${HOME:?HOME must be set}/worktrees}"
+kit_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+repo_root="$(git -C "$PWD" rev-parse --show-toplevel)"
+repo_root="$(cd "$repo_root" && pwd -P)"
+repos_root="$(cd "$repos_root" && pwd -P)"
+
+case "$repo_root" in
+  "$repos_root"/*) relative_repo="${repo_root#"$repos_root"/}" ;;
+  *)
+    printf 'error: repository %s is not under %s\n' "$repo_root" "$repos_root" >&2
+    printf 'set CLAUDE_SBX_REPOS_ROOT to override the source root\n' >&2
+    exit 2
+    ;;
+esac
+
+target="$worktrees_root/$relative_repo"
+common_git_dir="$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)"
+
+if [[ ! -e "$target" ]]; then
+  mkdir -p "$(dirname "$target")"
+  git -C "$repo_root" worktree add --detach "$target" HEAD
+elif [[ ! -d "$target" ]] || ! target_common_git_dir="$(git -C "$target" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
+  printf 'error: target exists but is not a Git worktree: %s\n' "$target" >&2
+  exit 2
+elif [[ "$target_common_git_dir" != "$common_git_dir" ]]; then
+  printf 'error: target belongs to a different Git repository: %s\n' "$target" >&2
+  exit 2
+fi
+
+printf 'Claude workspace: %s\n' "$target"
+# Mount the common Git directory too. A linked worktree's .git file points
+# there, so this preserves normal Git operations from inside the sandbox.
+exec sbx run --kit "$kit_dir" claude "$target" "$common_git_dir" "$@"

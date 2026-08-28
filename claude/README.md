@@ -1,0 +1,30 @@
+# Claude workstation kit
+
+A schema-v2 Docker Sandbox kit based on
+`docker/sandbox-templates:claude-code-docker`. It installs the requested editor,
+runtimes, browser automation, service CLIs, LSPs, ACP, GitHub SSH, and SSH commit
+signing during sandbox creation. Claude defaults to Opus 5 at xhigh effort.
+
+## Run
+
+```sh
+sbx settings set kit.allowedSources '["docker.io/","github.com/docker/","github.com/slurpyb/"]'
+sbx run --kit 'git+https://github.com/slurpyb/sbx-kits.git#ref=main&dir=claude' claude
+```
+
+For reproducibility, replace `main` with a release tag or commit SHA. Validate a
+checkout with `sbx kit validate ./claude`.
+
+## Host configuration
+
+Configure required secrets with `sbx secret set` before creating the sandbox.
+The kit declares `anthropic`, `github`, `outline`, `linear`, `shopify`,
+`cloudflare`, `firecrawl`, `jina`, `agentos`, and `perplexity` services. GitHub SSH authentication and
+commit signing use the host's forwarded SSH agent rather than `GH_TOKEN`.
+
+Use `sbx ports <sandbox>` to discover code-server's mapped port. Microsoft's VS
+Code tunnel is started manually with `vscode-server`; browser code-server starts
+automatically on container port 8080.
+
+The kit contains no network deny rule. Docker Sandbox local or organization
+governance may still apply independently.
