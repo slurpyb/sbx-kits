@@ -71,27 +71,27 @@ permissions:
       - host.docker.internal:8000
 
 credentials:
-  - service: anthropic
-    description: Anthropic API token used by Claude Code.
-    apiKey:
-      name: ANTHROPIC_API_KEY
-      proxyManaged: true
-      inject:
-        - domain: api.anthropic.com
-          header: x-api-key
-          format: "%s"
-  - service: github
-    description: GitHub token used by gh and HTTPS GitHub API operations; SSH uses the forwarded host agent.
-    apiKey:
-      name: GH_TOKEN
-      proxyManaged: true
-      inject:
-        - domain: api.github.com
-          header: Authorization
-          scheme: bearer
-        - domain: github.com
-          header: Authorization
-          scheme: bearer
+  # - service: anthropic
+  #   description: Anthropic API token used by Claude Code.
+  #   apiKey:
+  #     name: ANTHROPIC_API_KEY
+  #     proxyManaged: true
+  #     inject:
+  #       - domain: api.anthropic.com
+  #         header: x-api-key
+  #         format: "%s"
+  # - service: github
+  #   description: GitHub token used by gh and HTTPS GitHub API operations; SSH uses the forwarded host agent.
+  #   apiKey:
+  #     name: GH_TOKEN
+  #     proxyManaged: true
+  #     inject:
+  #       - domain: api.github.com
+  #         header: Authorization
+  #         scheme: bearer
+  #       - domain: github.com
+  #         header: Authorization
+  #         scheme: bearer
   - service: outline
     description: Outline knowledge-base API token. Kept as a real environment value because the Outline host is user-configurable.
     apiKey:
