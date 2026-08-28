@@ -1,16 +1,13 @@
 schemaVersion: "2"
-kind: sandbox
+kind: mixin
 name: claude-workstation
 displayName: Claude workstation
-description: Claude Code with ACP, SSH signing, AstroNvim, VS Code server, browser automation, service CLIs, and web/Python/Liquid/TypeScript tooling.
+description: Adds ACP, SSH signing, AstroNvim, VS Code server, browser automation, service CLIs, and web/Python/Liquid/TypeScript tooling to Docker Sandbox's built-in Claude agent.
 
-sandbox:
-  image: docker/sandbox-templates:claude-code-docker
-  entrypoint:
-    - /home/agent/.local/bin/claude-default
+requires:
+  agent: claude
 
 agentInstructions:
-  filename: AGENTS.md
   content: |
     ## Docker Sandbox workstation
 
@@ -151,6 +148,12 @@ ports:
 
 setup:
   install:
+    - description: Preserve the built-in Claude executable before installing the default-model wrapper.
+      user: "0"
+      command: |
+        set -eu
+        test -x /home/agent/.local/bin/claude
+        mv /home/agent/.local/bin/claude /home/agent/.local/bin/claude-real
     - description: Install base OS dependencies, SSH server, and GitHub SSH trust.
       user: "0"
       command: |
@@ -388,6 +391,12 @@ setup:
           "pgrep -f 'code-server.*0.0.0.0:8080' >/dev/null || nohup code-server --bind-addr 0.0.0.0:8080 --auth none '${WORKDIR}' > /tmp/code-server.log 2>&1 &",
         ]
   files:
+    - path: /home/agent/.local/bin/claude
+      mode: "0755"
+      description: Apply the workstation defaults when the built-in Claude agent starts.
+      content: |
+        #!/bin/sh
+        exec /home/agent/.local/bin/claude-default "$@"
     - path: /home/agent/.local/bin/claude-default
       mode: "0755"
       description: Start Claude Code with the requested default Opus 5 model and xhigh effort.
@@ -397,7 +406,7 @@ setup:
         export CLAUDE_CODE_EFFORT_LEVEL=xhigh
         /home/agent/.local/bin/install-observability-hooks claude || true
         /home/agent/.local/bin/agent-observe-hook --flush >/dev/null 2>&1 || true
-        exec /home/agent/.local/bin/claude --model claude-opus-5 --effort xhigh "$@"
+        exec /home/agent/.local/bin/claude-real --model claude-opus-5 --effort xhigh "$@"
     - path: /home/agent/.local/bin/claude-acp
       mode: "0755"
       description: Launch the pinned Claude ACP adapter.

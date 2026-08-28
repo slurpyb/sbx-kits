@@ -1,15 +1,12 @@
 # Claude workstation kit
 
-A schema-v2 Docker Sandbox kit based on
-`docker/sandbox-templates:claude-code-docker`. It installs the requested editor,
-runtimes, browser automation, service CLIs, LSPs, ACP, GitHub SSH, and SSH commit
-signing during sandbox creation. Claude defaults to Opus 5 at xhigh effort.
+A schema-v2 mixin for Docker Sandbox's built-in `claude` agent. It installs the requested editor, runtimes, browser automation, service CLIs, LSPs, ACP, GitHub SSH, and SSH commit signing during sandbox creation. Claude defaults to Opus 5 at xhigh effort.
 
 ## Run
 
 ```sh
 sbx settings set kit.allowedSources '["docker.io/","github.com/docker/","github.com/slurpyb/"]'
-sbx run --kit 'git+https://github.com/slurpyb/sbx-kits.git#ref=main&dir=claude' claude-workstation
+sbx run --kit 'git+https://github.com/slurpyb/sbx-kits.git#ref=main&dir=claude' claude
 ```
 
 For reproducibility, replace `main` with a release tag or commit SHA. Validate a

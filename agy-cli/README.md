@@ -1,9 +1,8 @@
 # Antigravity CLI workstation kit
 
-A schema-v2 Docker Sandbox kit that installs Google's Antigravity CLI (`agy`)
-1.1.22 on `docker/sandbox-templates:shell-docker`, together with the requested
-editor, runtimes, browser automation, service CLIs, LSPs, GitHub SSH, and SSH
-commit signing. It defaults to `gemini-3.1-pro-high` with high effort.
+A schema-v2 Docker Sandbox agent that installs Google's Antigravity CLI (`agy`) 1.1.22 on `docker/sandbox-templates:shell-docker`, together with the requested editor, runtimes, browser automation, service CLIs, LSPs, GitHub SSH, and SSH commit signing. It defaults to `gemini-3.1-pro-high` with high effort.
+
+This remains `kind: sandbox`: Docker Sandbox v0.39.0 has a built-in `gemini` agent, not a `google` or Antigravity agent. A mixin cannot define or replace the base agent entrypoint, and layering this kit onto `gemini` would launch Gemini CLI rather than `agy`.
 
 ## Run
 

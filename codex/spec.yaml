@@ -1,16 +1,13 @@
 schemaVersion: "2"
-kind: sandbox
+kind: mixin
 name: codex-workstation
 displayName: Codex workstation
-description: Codex with ACP, app-server, SSH signing, AstroNvim, VS Code server, browser automation, service CLIs, and web/Python/Liquid/TypeScript tooling.
+description: Adds ACP, app-server, SSH signing, AstroNvim, VS Code server, browser automation, service CLIs, and web/Python/Liquid/TypeScript tooling to Docker Sandbox's built-in Codex agent.
 
-sandbox:
-  image: docker/sandbox-templates:codex-docker
-  entrypoint:
-    - /home/agent/.local/bin/codex-default
+requires:
+  agent: codex
 
 agentInstructions:
-  filename: AGENTS.md
   content: |
     ## Docker Sandbox workstation
 
@@ -417,6 +414,12 @@ setup:
           "pgrep -f 'code-server.*0.0.0.0:8080' >/dev/null || nohup code-server --bind-addr 0.0.0.0:8080 --auth none '${WORKDIR}' > /tmp/code-server.log 2>&1 &",
         ]
   files:
+    - path: /home/agent/.local/bin/codex
+      mode: "0755"
+      description: Apply the workstation defaults when the built-in Codex agent starts.
+      content: |
+        #!/bin/sh
+        exec /home/agent/.local/bin/codex-default "$@"
     - path: /home/agent/.local/bin/codex-default
       mode: "0755"
       description: Start Codex with the requested default model and reasoning effort while preserving user arguments.

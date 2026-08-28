@@ -1,14 +1,12 @@
 # Codex workstation kit
 
-A schema-v2 Docker Sandbox kit based on `docker/sandbox-templates:codex-docker`.
-It installs the requested editor, runtime, browser, service CLI, LSP, ACP,
-GitHub SSH/signing, and Codex app-server tooling during sandbox creation.
+A schema-v2 mixin for Docker Sandbox's built-in `codex` agent. It installs the requested editor, runtime, browser, service CLI, LSP, ACP, GitHub SSH/signing, and Codex app-server tooling during sandbox creation.
 
 ## Run
 
 ```sh
 sbx settings set kit.allowedSources '["docker.io/","github.com/docker/","github.com/slurpyb/"]'
-sbx run --kit 'git+https://github.com/slurpyb/sbx-kits.git#ref=main&dir=codex' codex-workstation
+sbx run --kit 'git+https://github.com/slurpyb/sbx-kits.git#ref=main&dir=codex' codex
 ```
 
 For reproducibility, replace `main` with a release tag or commit SHA. Validate a
