@@ -1,6 +1,6 @@
 schemaVersion: "2"
 kind: mixin
-name: claude-workstation
+name: sb-claude
 displayName: Claude workstation
 description: Adds ACP, SSH signing, AstroNvim, VS Code server, browser automation, service CLIs, and web/Python/Liquid/TypeScript tooling to Docker Sandbox's built-in Claude agent.
 
@@ -8,59 +8,63 @@ requires:
   agent: claude
 
 agentInstructions:
+  filename: CLAUDE.md
   content: |
-    ## Docker Sandbox workstation
-
     You are inside a Docker Sandbox, not on the host. `sudo` needs no password, and everything you install lasts only as long as this sandbox.
-
-    Default model `claude-opus-5` at `xhigh` effort. The Claude ACP adapter is `claude-acp`.
-
     ### Credentials are sentinels
-
     Credential variables hold **sentinel** placeholders, not secrets. Use them as ordinary environment variables and let the sandbox proxy swap the real value in for approved hosts. Keep each sentinel inside the process that reads it: pass the variable, and let a failed call fail. Never echo, log, commit, or paste one into an interactive login.
-
-    The built-in Claude agent supplies `ANTHROPIC_API_KEY` and `GH_TOKEN`. This kit adds `OUTLINE_API_TOKEN`, `LINEAR_API_KEY`, `SHOPIFY_CLI_THEME_TOKEN`, `TUNNEL_TOKEN`, `FIRECRAWL_API_KEY`, `JINA_API_KEY`, and `PERPLEXITY_API_KEY`.
-
-    ### A 403 is a policy rule, not a bug
+    This kit adds 
+      - `OUTLINE_API_TOKEN`, 
+      - `LINEAR_API_KEY`, 
+      - `SHOPIFY_CLI_THEME_TOKEN`, 
+      - `TUNNEL_TOKEN`, 
+      - `FIRECRAWL_API_KEY`,
+      - `JINA_API_KEY`, and
+      - `PERPLEXITY_API_KEY`.
+      - `CF_ACCESS_CLIENT_SECRET`
+      - `GOOGLE_AI_KEY`
 
     Egress is allowlisted. Read the response body of any 403: it names the rule and the reason. This kit adds no deny rules, so a block means the host is absent from the allowlist or org governance is overriding it. Give the user the exact host — they run `sbx policy log` to confirm and `sbx policy allow network <host>` to fix it. Treat the block as final for this session: mirrors, retries, and alternate ports hit the same proxy.
 
     ### Installed on top of the base agent
 
-    Reach for these by name; they are not in the base image.
-
-    - `ol` Outline · `lin` Linear · `pplx` Perplexity · `firecrawl` · `jina` — each needs its token below, and some need a one-time `login`/`init` before first use.
-    - `shopify` Shopify CLI; the Liquid language server is `shopify theme language-server`.
-    - `cloudflared` for tunnels. `openspec`. `codemap`.
-    - `octocode` — code research across GitHub, this workspace, and npm, with LSP-backed semantic
-      queries. Reach for it when a question spans repositories that are not checked out here. Run
-      `octocode context --minimal` for its tool list and protocol, then `octocode tools <name> --scheme`
-      before composing a query: the schemas are exact and an invented field name is rejected outright.
-      It already authenticates from `GH_TOKEN`, so leave `octocode login` alone — device-flow sign-in
-      cannot complete against a proxy-managed sentinel.
+    Reach for these by name:
+    - `uv/uvx`: Python package manager and virtual environments. Prefer to use over bare python3
+    - `ol`: Outline wiki search/create when the answer lives in team docs. `OUTLINE_API_TOKEN`. https://github.com/Doist/outline-cli
+    - `lin`: Create a Linear issue (`lin new`) or check out its branch (`lin checkout`). `LINEAR_API_KEY`. https://www.npmjs.com/package/@linear/cli
+    - `pplx`: Grounded web search and query-relevant page snippets as JSON. `PERPLEXITY_API_KEY`. https://docs.perplexity.ai/docs/cli/overview
+    - `firecrawl`: Scrape, crawl, map, or search live pages. `FIRECRAWL_API_KEY`. https://docs.firecrawl.dev/sdks/cli
+    - `jina`: Read a URL to markdown, web-search, embed, or rerank. `JINA_API_KEY`. https://github.com/jina-ai/cli
+    - `shopify`: Shopify apps, themes, and partner CLI; Liquid LSP is `shopify theme language-server`. `SHOPIFY_CLI_THEME_TOKEN`. https://shopify.dev/docs/api/shopify-cli
+    - `cloudflared`: Run a Cloudflare Tunnel (`cloudflared tunnel run`). `TUNNEL_TOKEN`. https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/run-parameters/
+    - `openspec`: Init, validate, or archive artifact-guided change specs in a project. no env. https://github.com/Fission-AI/OpenSpec/blob/main/docs/cli.md
+    - `codemap`: Generate token-optimized markdown docs and repo maps (`codemap gen`). no env. https://codemap.run/0.3.0/
+    - `octocode`: Research code across GitHub, this workspace, and npm (LSP) when the question spans repos not checked out here; `octocode context --minimal` then `octocode tools <name> --scheme`. `GH_TOKEN` (skip `octocode login` — device-flow fails against the proxy sentinel). https://github.com/bgauryy/octocode/blob/main/packages/octocode/docs/OCTOCODE_CLI.md
     - `agent-os-project-install` — cd into a project and run it to install Builder Methods Agent OS there. Clone lives at `/home/agent/agent-os`; `agent-os-sync-to-profile` and `agent-os-common-functions` are alongside it.
-    - `playwright` is not installed by default, because the CLI plus a Chromium build costs minutes of
-      create time that most tasks never use. When a task genuinely needs a browser, add both:
+    - `playwright` is not installed by default, create time that most tasks never use. When a task genuinely needs a browser, add both:
       `sudo bun install -g --trust playwright@1.61.1 && playwright install --with-deps chromium`.
       The browser lands in `~/.cache/ms-playwright`.
-    - `nvim` with AstroNvim.
-    - Node 24, `bun`/`bunx`, `typescript-language-server`, `pyright-langserver`.
+    ## Querying Gemini
+    You can ask gemini for assistance:
 
+        curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent" \
+          -H 'Content-Type: application/json' \
+          -H 'X-goog-api-key: $GOOGLE_AI_KEY' \
+          -X POST \
+          -d '{
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": "Explain how AI works in a few words"
+                  }
+                ]
+              }
+            ]
+          }'
+      `
     ### Git signing
-
-    Commits and tags sign automatically with the forwarded host SSH key, and GitHub host keys are preloaded. When signing fails the cause is almost always the agent forward, so check `SSH_AUTH_SOCK` and `ssh-add -L` first and report what you find. The signing config is set system-wide and correct; leave it as it is.
-
-    ### Observability
-
-    Hooks stream prompts, assistant messages, tool activity, and transcript deltas to `AGENT_OBSERVABILITY_URL` (default `http://host.docker.internal:8000`), buffering to `/home/agent/logs/<session-id>/events.jsonl` whenever it is unreachable. Capture is off unless `/home/agent/.agent-observe-enabled` exists: without that file the hooks exit before any network or disk write. Create it to turn capture on, delete it to stop.
-
-    ### Project-triggered MCP servers
-
-    Check the project root once, before starting substantive work, and register what matches. Run `claude mcp list` first and add only what is missing.
-
-    - `astro.config.*` present → `claude mcp add --transport http astro-docs https://mcp.docs.astro.build/mcp`
-    - `shopify.app.toml`, or `sections/` beside `templates/` → `claude mcp add --transport stdio shopify-dev -- npx -y @shopify/dev-mcp@1.14.6`
-    - `panda.config.*` present → `claude mcp add --transport stdio panda -- npx -y @pandacss/mcp@1.12.0`
+    Commits and tags sign automatically with the forwarded host SSH key, and GitHub host keys are preloaded. When signing fails the cause is almost always the agent forward, so check `SSH_AUTH_SOCK` and `ssh-add -L` first and report what you find. The signing config is set system-wide and correct; leave it as it is
 permissions:
   network:
     allow:
@@ -85,7 +89,7 @@ permissions:
       - download.docker.com
       - cdn.playwright.dev
       - playwright.download.prss.microsoft.com
-      - storage.googleapis.com
+      - "*.googleapis.com"
       - api.linear.app
       - api.firecrawl.dev
       - api.jina.ai
@@ -96,10 +100,9 @@ permissions:
       - partners.shopify.com
       - accounts.shopify.com
       - admin.shopify.com
-      - myshopify.com
       - "*.myshopify.com"
-      - cloudflare.com
-      - api.cloudflare.com
+      - "*.cloudflare.com"
+      - "*.fullsnacklab.com"
       - host.docker.internal:8000
 
 credentials:
@@ -119,15 +122,45 @@ credentials:
     description: Cloudflare Tunnel token for non-interactive cloudflared runs.
     apiKey:
       name: TUNNEL_TOKEN
+  # - service: <service-id>
+  #   description: <text> # optional
+  #   required: <true | false> # optional, default false
+  #   provider: <provider> # optional, reserved
+  #   apiKey:
+  #     name: ENV_VAR
+  #     proxyManaged: true
+  #     inject:
+  #       - domain: <domain>
+  #         header: <header>
+  #         format: <format>
+  #       - domain: <domain>
+  #         scheme: bearer
+  #       - domain: <domain>
+  #         scheme: basic
+  #         username: <user> # required with scheme: basic\
+  - service: google-ai
+    apiKey:
+      name: GOOGLE_AI_KEY
+      inject:
+        - domain: generativelanguage.googleapis.com
+          header: "X-goog-api-key"
+          format: "%s"
+  - service: fullsnacklab-access-secret
+    description: Cloudflare Access Secret for fullsnacklab.com
+    apiKey:
+      name: CF_ACCESS_CLIENT_SECRET
+      inject:
+        - domain: "*.fullsnacklab.com"
+          header: CF-Access-Client-Secret
+          scheme: bearer
   - service: firecrawl
     description: Firecrawl API token.
     apiKey:
       name: FIRECRAWL_API_KEY
-      proxyManaged: true
       inject:
         - domain: api.firecrawl.dev
           header: Authorization
-          scheme: bearer
+          format: "Bearer %s"
   - service: jina
     description: Jina AI API token.
     apiKey:
@@ -140,7 +173,7 @@ credentials:
       inject:
         - domain: api.perplexity.ai
           header: Authorization
-          scheme: bearer
+          format: "Bearer %s"
 
 environment:
   variables:
