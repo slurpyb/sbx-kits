@@ -1,6 +1,6 @@
 schemaVersion: "2"
 kind: sandbox
-name: codex
+name: codex-workstation
 displayName: Codex workstation
 description: Codex with ACP, app-server, SSH signing, AstroNvim, VS Code server, browser automation, service CLIs, and web/Python/Liquid/TypeScript tooling.
 

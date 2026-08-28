@@ -1,6 +1,6 @@
 schemaVersion: "2"
 kind: sandbox
-name: claude
+name: claude-workstation
 displayName: Claude workstation
 description: Claude Code with ACP, SSH signing, AstroNvim, VS Code server, browser automation, service CLIs, and web/Python/Liquid/TypeScript tooling.
 

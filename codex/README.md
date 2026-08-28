@@ -8,7 +8,7 @@ GitHub SSH/signing, and Codex app-server tooling during sandbox creation.
 
 ```sh
 sbx settings set kit.allowedSources '["docker.io/","github.com/docker/","github.com/slurpyb/"]'
-sbx run --kit 'git+https://github.com/slurpyb/sbx-kits.git#ref=main&dir=codex' codex
+sbx run --kit 'git+https://github.com/slurpyb/sbx-kits.git#ref=main&dir=codex' codex-workstation
 ```
 
 For reproducibility, replace `main` with a release tag or commit SHA. Validate a

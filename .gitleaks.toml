@@ -5,7 +5,7 @@ useDefault = true
 
 # These are developer-local, gitignored sandbox environment directories rather
 # than repository source. Their credentials are intentionally never committed.
-[[allowlists]]
+[allowlist]
 description = "Ignore local sandbox environment directories"
 paths = [
   '''^envs/''',

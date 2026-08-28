@@ -9,7 +9,7 @@ signing during sandbox creation. Claude defaults to Opus 5 at xhigh effort.
 
 ```sh
 sbx settings set kit.allowedSources '["docker.io/","github.com/docker/","github.com/slurpyb/"]'
-sbx run --kit 'git+https://github.com/slurpyb/sbx-kits.git#ref=main&dir=claude' claude
+sbx run --kit 'git+https://github.com/slurpyb/sbx-kits.git#ref=main&dir=claude' claude-workstation
 ```
 
 For reproducibility, replace `main` with a release tag or commit SHA. Validate a
