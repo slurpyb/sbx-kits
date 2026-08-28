@@ -66,6 +66,7 @@ permissions:
       - release-assets.githubusercontent.com
       - registry.npmjs.org
       - pypi.org
+      - astral.sh
       - files.pythonhosted.org
       - nodejs.org
       - update.code.visualstudio.com
@@ -156,20 +157,14 @@ ports:
 
 setup:
   install:
-    - description: Install base OS dependencies, SSH server, and GitHub SSH trust.
+    - description: Trust GitHub's SSH host keys for the agent user.
       user: "0"
       command: |
         set -eu
-        attempt=0
-        until apt-get update -qq; do attempt=$((attempt + 1)); [ "$attempt" -lt 240 ]; sleep 0.5; done
-        attempt=0
-        until DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends build-essential ca-certificates curl git jq openssh-server python3 python3-venv python3-pip ripgrep unzip xz-utils; do attempt=$((attempt + 1)); [ "$attempt" -lt 240 ]; sleep 0.5; done
-        ssh-keygen -A
         install -d -m 0700 -o agent -g agent /home/agent/.ssh
         curl -fsSL https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' > /home/agent/.ssh/known_hosts
         chmod 0644 /home/agent/.ssh/known_hosts
         chown agent:agent /home/agent/.ssh/known_hosts
-        rm -rf /var/lib/apt/lists/*
     - description: Install pinned fnm and Node.js 24 system-wide.
       user: "0"
       command: |
@@ -216,20 +211,15 @@ setup:
       user: "0"
       command: |
         set -eu
-        # bun, not npm: same packages, a fraction of the wall time. --trust
-        # runs the lifecycle scripts esbuild and outline-cli need for their
-        # platform binaries, which bun otherwise skips.
         BUN_INSTALL=/opt/bun bun install -g --trust \
           @doist/outline-cli@2.0.1 \
           @linear/cli@0.0.5 \
           @shopify/cli@4.7.0 \
           firecrawl-cli@1.23.3 \
-          playwright@1.61.1 \
-          @playwright/test@1.61.1 \
           pyright@1.1.413 \
           typescript@7.0.2 \
           typescript-language-server@6.0.0
-        for bin in ol lin shopify firecrawl playwright pyright pyright-langserver tsc tsserver typescript-language-server; do
+        for bin in ol lin shopify firecrawl pyright pyright-langserver tsc tsserver typescript-language-server; do
           [ ! -e "/opt/bun/bin/$bin" ] || ln -sf "/opt/bun/bin/$bin" "/usr/local/bin/$bin"
         done
         ln -sf /opt/bun/bin/ol /usr/local/bin/outline
@@ -239,18 +229,19 @@ setup:
         exec shopify theme language-server "$@"
         EOF
         chmod 0755 /usr/local/bin/liquid-language-server
-    - description: Install pinned Jina CLI and CodeMap in isolated Python environments.
+    - description: Install pinned Jina CLI and CodeMap as uv tools.
       user: "0"
       command: |
         set -eu
-        python3 -m venv /opt/jina-cli
-        /opt/jina-cli/bin/pip install --no-cache-dir jina-cli==0.3.0
-        ln -sf /opt/jina-cli/bin/jina /usr/local/bin/jina
-        ln -sf /opt/jina-cli/bin/jina /usr/local/bin/jina-cli
-        python3 -m venv /opt/codemap
-        /opt/codemap/bin/pip install --no-cache-dir codemap==0.3.0
-        ln -sf /opt/codemap/bin/codemap /usr/local/bin/codemap
-        [ ! -x /opt/codemap/bin/cm ] || ln -sf /opt/codemap/bin/cm /usr/local/bin/cm
+        # uv ships in the base image at /usr/local/bin/uv. It builds the
+        # isolated environment, resolves from wheels, and drops the entry-point
+        # shims straight into UV_TOOL_BIN_DIR, so no venv/pip/compiler is
+        # needed. --python 3.12 pins a standalone CPython rather than trusting
+        # the image's 3.14 to satisfy these two.
+        export UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin
+        uv tool install --python 3.12 'jina-cli==0.3.0'
+        uv tool install --python 3.12 'codemap==0.3.0'
+        ln -sf /usr/local/bin/jina /usr/local/bin/jina-cli
     - description: Install pinned cloudflared and Perplexity CLI binaries.
       user: "0"
       command: |
@@ -355,14 +346,14 @@ setup:
         git config --system gpg.ssh.allowedSignersFile /home/agent/.config/git/allowed_signers
         install -d -m 0755 -o agent -g agent /home/agent/.config/git
   startup:
-    - description: Install the observability hooks once the platform has written its own Claude settings.
+    - description: Apply the kit's Claude settings and observability hooks once the platform has written its own.
       user: "1000"
       background: true
       command:
         [
           "sh",
           "-c",
-          "i=0; while [ $i -lt 60 ] && ! grep -q themeId /home/agent/.claude/settings.json 2>/dev/null; do sleep 1; i=$((i+1)); done; python3 /home/agent/.local/bin/install-observability-hooks claude || true; python3 /home/agent/.local/bin/agent-observe-hook --flush >/dev/null 2>&1 || true",
+          "i=0; while [ $i -lt 60 ] && ! grep -q themeId /home/agent/.claude/settings.json 2>/dev/null; do sleep 1; i=$((i+1)); done; python3 /home/agent/.local/bin/apply-workstation-settings || true; python3 /home/agent/.local/bin/install-observability-hooks claude || true; python3 /home/agent/.local/bin/agent-observe-hook --flush >/dev/null 2>&1 || true",
         ]
     - description: Start VS Code server on the mounted workspace.
       user: "1000"
@@ -373,6 +364,34 @@ setup:
           "nohup /home/agent/.local/bin/start-code-server >> /tmp/code-server.log 2>&1 &",
         ]
   files:
+    - path: /home/agent/.local/bin/apply-workstation-settings
+      mode: "0755"
+      description: Merge the kit's Claude defaults into ~/.claude/settings.json, which the platform rewrites at every creation.
+      content: |
+        #!/usr/bin/env python3
+        """Turn off commit/PR attribution trailers, preserving every other setting."""
+        import json
+        import pathlib
+
+        path = pathlib.Path("/home/agent/.claude/settings.json")
+        try:
+            settings = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            settings = {}
+        if not isinstance(settings, dict):
+            settings = {}
+
+        current = settings.get("attribution")
+        attribution = dict(current) if isinstance(current, dict) else {}
+        # setdefault, so a value the user set by hand survives a restart.
+        attribution.setdefault("pr", "")
+        attribution.setdefault("commit", "")
+        settings["attribution"] = attribution
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(settings, indent=2) + "\n")
+        temporary.replace(path)
     - path: /home/agent/.local/bin/start-code-server
       mode: "0755"
       description: Start code-server on the workspace. ${WORKDIR} is substituted in setup.files content, which startup argv does not get, so the path is baked in here.

@@ -29,10 +29,11 @@ updater rewrites — so leaving it on would replace the wrapper mid-session and
 strand the preserved `claude-real` binary. The sandbox therefore tracks the
 base image's Claude version; recreate the sandbox to pick up a newer one.
 
-This kit seeds `<workspace>/.claude/settings.local.json` from
-`files/workspace/`. Note that this is an overlay: it is rewritten on every
-sandbox start, and under a direct (non-`--clone`) mount that write lands on the
-host copy of the file.
+Commit and PR attribution trailers are turned off by merging `attribution`
+into `/home/agent/.claude/settings.json` at startup, after the platform writes
+that file. The merge uses `setdefault`, so a value you set by hand survives a
+restart, and it applies to every project in the sandbox rather than only the
+mounted workspace.
 
 The kit contains no network deny rule. Docker Sandbox local or organization
 governance may still apply independently.
